@@ -26,8 +26,11 @@ impl QuantizedMistralEngine {
 }
 
 impl InferenceModel for QuantizedMistralEngine {
-    fn forward(&mut self, token: u32, pos: usize) -> Result<Tensor, Box<dyn std::error::Error>> {
-        let input = Tensor::new(&[[token]], &self.device)?;
+    fn forward(&mut self, tokens: &[u32], pos: usize) -> Result<Tensor, Box<dyn std::error::Error>> {
+        if tokens.is_empty() {
+            return Ok(Tensor::zeros((1, 1, 32000), candle_core::DType::F32, &self.device)?);
+        }
+        let input = Tensor::new(&[tokens], &self.device)?;
         let logits = self.model.forward(&input, pos)?;
         let logits = logits.squeeze(0)?;
         Ok(logits)

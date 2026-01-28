@@ -63,6 +63,10 @@ path = "chatbots/mistral/mistral_streaming.rs"
 name = "mistral_stress_test"
 path = "chatbots/mistral/mistral_stress_test.rs"
 
+[[bin]]
+name = "llama_speculative"
+path = "chatbots/llama/llama_speculative.rs"
+
 # ============================================================================
 # Chatbots - Qwen Family
 # ============================================================================

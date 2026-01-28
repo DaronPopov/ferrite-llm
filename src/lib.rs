@@ -27,6 +27,6 @@ pub mod sampling;
 
 // Re-exports for convenience
 pub use tokenizer::{Tokenizer, ChatMessage, ChatRole, Encoding, TokenizerError};
-pub use generation::{GenerationConfig, StopCondition, GenerationStats, InferenceModel, StreamingInference};
+pub use generation::{GenerationConfig, StopCondition, GenerationStats, InferenceModel, StreamingInference, SpeculativeInference};
 pub use models::{ModelConfig, ModelFamily};
 pub use sampling::{Sampler, SamplerConfig};

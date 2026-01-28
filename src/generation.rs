@@ -182,8 +182,9 @@ impl GenerationStats {
 
 /// Trait for models that can perform streaming inference
 pub trait InferenceModel {
-    /// Perform forward pass for a single token at a given position
-    fn forward(&mut self, token: u32, pos: usize) -> Result<candle_core::Tensor, Box<dyn std::error::Error>>;
+    /// Perform forward pass for one or more tokens at a given position.
+    /// Should return logits for all input tokens: [batch, seq_len, vocab_size] or [seq_len, vocab_size].
+    fn forward(&mut self, tokens: &[u32], pos: usize) -> Result<candle_core::Tensor, Box<dyn std::error::Error>>;
     /// Prefill the model with multiple tokens (prompt processing)
     fn prefill(&mut self, tokens: &[u32]) -> Result<candle_core::Tensor, Box<dyn std::error::Error>>;
 }
@@ -273,7 +274,7 @@ impl<'a, M: InferenceModel> StreamingInference<'a, M> {
         let text = self.decoder.step(current_token)?;
 
         // Prepare for next token
-        let logits = self.model.forward(current_token, self.pos)?;
+        let logits = self.model.forward(&[current_token], self.pos)?;
         self.pos += 1;
 
         // Sample next token with repetition penalty
@@ -291,4 +292,167 @@ impl<'a, M: InferenceModel> StreamingInference<'a, M> {
     pub fn is_finished(&self) -> bool {
         self.finished
     }
+}
+
+/// A high-level speculative decoding engine
+pub struct SpeculativeInference<'a, T: InferenceModel, D: InferenceModel> {
+    target: &'a mut T,
+    draft: &'a mut D,
+    sampler: crate::Sampler,
+    config: GenerationConfig,
+    stats: GenerationStats,
+    decoder: crate::tokenizer::StreamDecoder,
+    pos: usize,
+    next_token: Option<u32>,
+    eos_token: u32,
+    all_tokens: Vec<u32>,
+    finished: bool,
+    draft_k: usize,
+}
+
+impl<'a, T: InferenceModel, D: InferenceModel> SpeculativeInference<'a, T, D> {
+    /// Create a new speculative inference session
+    pub fn new(
+        target: &'a mut T,
+        draft: &'a mut D,
+        tokenizer: &'a crate::Tokenizer,
+        prompt: &str,
+        config: GenerationConfig,
+        draft_k: usize,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let encoding = tokenizer.encode(prompt)?;
+        let tokens = encoding.ids;
+        let eos_token = tokenizer.eos_token_id().unwrap_or(2);
+        
+        let mut stats = GenerationStats::new(tokens.len());
+        stats.start();
+
+        // Prefill both models
+        let target_logits = target.prefill(&tokens)?;
+        let _ = draft.prefill(&tokens)?; // We don't need draft's initial logits, target's are authoritative
+        
+        stats.end_prefill();
+
+        let mut sampler = crate::Sampler::new(crate::SamplerConfig {
+            temperature: config.temperature,
+            top_p: config.top_p,
+            top_k: config.top_k,
+            repetition_penalty: config.repetition_penalty,
+            seed: config.seed,
+        });
+
+        // Sample first token from target logits
+        let next_token = sampler.sample(&target_logits, &tokens)?;
+        
+        let decoder = tokenizer.decode_stream(&tokens, true);
+        let pos = tokens.len();
+
+        Ok(Self {
+            target,
+            draft,
+            sampler,
+            config,
+            stats,
+            decoder,
+            pos,
+            next_token: Some(next_token),
+            eos_token,
+            all_tokens: tokens,
+            finished: false,
+            draft_k,
+        })
+    }
+
+    /// Generate the next batch of tokens and return their text
+    /// This might return multiple tokens in a single call.
+    pub fn next(&mut self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        if self.finished {
+            return Ok(None);
+        }
+
+        let first_token = match self.next_token {
+            Some(t) => t,
+            None => return Ok(None),
+        };
+
+        if first_token == self.eos_token || self.stats.generated_tokens >= self.config.max_tokens {
+            self.finished = true;
+            return Ok(self.decoder.flush()?);
+        }
+
+        // 1. Draft K new tokens
+        let mut draft_tokens = vec![first_token];
+        let mut current_pos = self.pos;
+        
+        for _ in 0..self.draft_k {
+            let last = *draft_tokens.last().unwrap();
+            if last == self.eos_token { break; }
+            
+            let logits = self.draft.forward(&[last], current_pos)?;
+            let sampled = self.sampler.sample(&logits, &[])?; // No penalty for draft Scout
+            draft_tokens.push(sampled);
+            current_pos += 1;
+        }
+
+        // 2. Verify all draft tokens in a single target forward pass
+        // draft_tokens: [T_start, D1, D2, ..., Dk]
+        let target_logits = self.target.forward(&draft_tokens, self.pos)?;
+        
+        // target_logits is [seq_len, vocab_size]
+        // L0 predicts D1, L1 predicts D2, ..., Lk predicts bonus token
+        let target_logits_vec = target_logits.chunk(draft_tokens.len(), 0)?;
+        
+        let mut accepted_text = String::new();
+        let mut accepted_count = 0;
+        let mut last_verified_token = first_token;
+
+        for (i, draft_token) in draft_tokens.iter().enumerate().skip(1) {
+            // Sample from target to see what it wanted at this position
+            let target_token = self.sampler.sample(&target_logits_vec[i-1], &self.all_tokens)?;
+            
+            // Record and decode the verified token (the one from previous step)
+            self.all_tokens.push(last_verified_token);
+            self.stats.record_token();
+            if let Some(t) = self.decoder.step(last_verified_token)? {
+                accepted_text.push_str(&t);
+            }
+            accepted_count += 1;
+            
+            if target_token == *draft_token {
+                // Correct guess! Keep going
+                last_verified_token = target_token;
+            } else {
+                // Wrong guess! This target_token is the correction
+                last_verified_token = target_token;
+                break;
+            }
+        }
+
+        // If we reached the end of draft successfully, the last target logit is our next "first_token"
+        // and we might have one more verified token to sample.
+        if accepted_count == draft_tokens.len() - 1 {
+            let bonus_token = self.sampler.sample(target_logits_vec.last().unwrap(), &self.all_tokens)?;
+            // The last_verified_token (Dk) is already set. 
+            // We still need to record Dk and set bonus_token as next_token.
+            self.all_tokens.push(last_verified_token);
+            self.stats.record_token();
+            if let Some(t) = self.decoder.step(last_verified_token)? {
+                accepted_text.push_str(&t);
+            }
+            self.next_token = Some(bonus_token);
+            self.pos += accepted_count + 1;
+        } else {
+            // We broke early. last_verified_token is the correction.
+            self.next_token = Some(last_verified_token);
+            self.pos += accepted_count;
+        }
+
+        // Update draft model position to match target
+        let _ = self.draft.forward(&[], self.pos); // Sync draft's KV cache if needed (some models do)
+
+        Ok(Some(accepted_text))
+    }
+
+    pub fn stats(&self) -> &GenerationStats { &self.stats }
+    pub fn is_finished(&self) -> bool { self.finished }
 }
