@@ -220,10 +220,28 @@ fn run_model(name: &str, quantized: bool) {
         }
     };
 
-    // Check if token is needed
+    // Check if token is needed and prompt if missing
     if family.requires_token() && config::get_token().is_none() && std::env::var("HF_TOKEN").is_err() {
-        eprintln!("\n{} may require a HuggingFace token.", family.display_name());
-        eprintln!("Run 'ferrite-chat --login' to set up your token.\n");
+        println!("\n{} requires a HuggingFace token.", family.display_name());
+        println!("Get your token at: https://huggingface.co/settings/tokens\n");
+        print!("Enter HuggingFace token (or press Enter to skip): ");
+        io::stdout().flush().unwrap();
+
+        let mut token = String::new();
+        io::stdin().read_line(&mut token).unwrap();
+        let token = token.trim();
+
+        if !token.is_empty() {
+            match config::save_token(token) {
+                Ok(_) => {
+                    println!("Token saved!\n");
+                    config::setup_env();
+                }
+                Err(e) => eprintln!("Failed to save token: {}\n", e),
+            }
+        } else {
+            println!("Continuing without token (model may fail to download)...\n");
+        }
     }
 
     // Determine which binary to run
