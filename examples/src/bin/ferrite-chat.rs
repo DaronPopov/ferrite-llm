@@ -227,7 +227,7 @@ fn run_model(name: &str, quantized: bool) {
     }
 
     // Determine which binary to run
-    let binary = match (family, quantized) {
+    let binary_name = match (family, quantized) {
         (ModelFamily::Llama, _) => "tinyllama_inference",
         (ModelFamily::Mistral, true) => "mistral_quantized_inference",
         (ModelFamily::Mistral, false) => "mistral_inference",
@@ -239,14 +239,22 @@ fn run_model(name: &str, quantized: bool) {
 
     println!("\nLaunching {}...\n", family.display_name());
 
-    // Run the inference binary
-    let status = Command::new("cargo")
-        .args(["run", "--release", "--bin", binary])
-        .status();
+    // Find binary: check same directory as this executable, then PATH
+    let binary_path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(binary_name)))
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| std::path::PathBuf::from(binary_name));
+
+    let status = Command::new(&binary_path).status();
 
     match status {
         Ok(s) if !s.success() => eprintln!("Model exited with error"),
-        Err(e) => eprintln!("Failed to launch model: {}", e),
+        Err(e) => {
+            eprintln!("Failed to launch model: {}", e);
+            eprintln!("Binary path: {:?}", binary_path);
+            eprintln!("\nTry running directly: {}", binary_name);
+        }
         _ => {}
     }
 }

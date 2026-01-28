@@ -51,6 +51,7 @@ struct TextGenerator {
     model: Mistral,
     device: Device,
     tokenizer: Tokenizer,
+    #[allow(dead_code)]
     config: Config,
     precision: Precision,
 }

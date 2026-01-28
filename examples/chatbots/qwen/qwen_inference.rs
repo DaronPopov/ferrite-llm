@@ -33,6 +33,7 @@ fn qwen2_0_5b_config() -> Config {
 }
 
 /// Model configuration for Qwen2-1.5B-Instruct
+#[allow(dead_code)]
 fn qwen2_1_5b_config() -> Config {
     Config {
         vocab_size: 151936,
