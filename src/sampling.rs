@@ -14,6 +14,7 @@ pub struct SamplerConfig {
     pub temperature: f64,
     pub top_p: f64,
     pub top_k: usize,
+    pub repetition_penalty: f32,
     pub seed: u64,
 }
 
@@ -23,6 +24,7 @@ impl Default for SamplerConfig {
             temperature: 0.7,
             top_p: 0.9,
             top_k: 0,
+            repetition_penalty: 1.1,
             seed: 42,
         }
     }
@@ -47,13 +49,21 @@ impl Sampler {
             temperature: 0.0,
             top_p: 1.0,
             top_k: 0,
+            repetition_penalty: 1.0,
             seed: 0,
         })
     }
 
-    /// Sample a token from logits
-    pub fn sample(&mut self, logits: &Tensor) -> CandleResult<u32> {
+    /// Sample a token from logits with repetition penalty
+    pub fn sample(&mut self, logits: &Tensor, previous_tokens: &[u32]) -> CandleResult<u32> {
         let logits = logits.squeeze(0)?; // Remove batch dim if present
+
+        // Apply repetition penalty
+        let logits = if self.config.repetition_penalty != 1.0 && !previous_tokens.is_empty() {
+            self.apply_repetition_penalty(&logits, previous_tokens)?
+        } else {
+            logits
+        };
 
         // Greedy decoding
         if self.config.temperature == 0.0 {
@@ -93,6 +103,24 @@ impl Sampler {
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
             .unwrap();
         Ok(idx as u32)
+    }
+
+    fn apply_repetition_penalty(&self, logits: &Tensor, previous_tokens: &[u32]) -> CandleResult<Tensor> {
+        let mut logits_vec: Vec<f32> = logits.to_vec1()?;
+        let penalty = self.config.repetition_penalty;
+
+        for &token_id in previous_tokens {
+            if let Some(logit) = logits_vec.get_mut(token_id as usize) {
+                // If logit > 0, divide by penalty; if < 0, multiply by penalty
+                *logit = if *logit > 0.0 {
+                    *logit / penalty
+                } else {
+                    *logit * penalty
+                };
+            }
+        }
+
+        Tensor::from_vec(logits_vec, logits.shape(), logits.device())
     }
 
     fn top_p_filter(&self, probs: &[f32]) -> Vec<f32> {

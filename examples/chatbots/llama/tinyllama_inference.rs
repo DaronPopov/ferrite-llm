@@ -23,7 +23,7 @@ fn tinyllama_config() -> Config {
         num_key_value_heads: 4,
         rms_norm_eps: 1e-5,
         rope_theta: 10000.0,
-        use_flash_attn: false,
+        use_flash_attn: cfg!(feature = "flash-attn"),
         bos_token_id: Some(1),
         eos_token_id: None,
         rope_scaling: None,

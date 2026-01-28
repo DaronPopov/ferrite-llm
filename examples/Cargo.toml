@@ -7,6 +7,10 @@ description = "Ferrite Inference Platform - LLM chatbots powered by Candle"
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+flash-attn = ["candle-transformers/flash-attn"]
+
 [dependencies]
 # Ferrite v2 - Candle companion library
 ferrite = { path = ".." }

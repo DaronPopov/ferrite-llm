@@ -6,7 +6,7 @@ use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::generation::LogitsProcessor;
 use candle_transformers::models::mistral::{Config, Model as Mistral};
-use ferrite::{ChatMessage, Tokenizer};
+use ferrite::{ChatMessage, Tokenizer, StopCondition};
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -26,7 +26,7 @@ fn mistral_7b_config() -> Config {
         rms_norm_eps: 1e-5,
         rope_theta: 1000000.0,
         sliding_window: Some(4096),
-        use_flash_attn: false,
+        use_flash_attn: cfg!(feature = "flash-attn"),
     }
 }
 
@@ -103,6 +103,7 @@ impl TextGenerator {
         max_tokens: usize,
         temperature: f64,
         top_p: f64,
+        stop_sequences: &[&str],
     ) -> Result<String, Box<dyn std::error::Error>> {
         let encoding = self.tokenizer.encode(prompt)?;
         let tokens: Vec<u32> = encoding.ids.clone();
@@ -113,6 +114,13 @@ impl TextGenerator {
         let mut logits_processor = LogitsProcessor::new(42, Some(temperature), Some(top_p));
         let mut decoder = self.tokenizer.decode_stream(&tokens, true);
         let mut all_tokens = tokens.clone();
+        let mut generated_text = String::new();
+
+        // Build stop conditions
+        let stop_conditions: Vec<StopCondition> = stop_sequences
+            .iter()
+            .map(|s| StopCondition::Text(s.to_string()))
+            .collect();
 
         let input = Tensor::new(tokens.as_slice(), &self.device)?;
         let input = input.unsqueeze(0)?;
@@ -133,6 +141,7 @@ impl TextGenerator {
         if let Ok(Some(text)) = decoder.step(next_token) {
             print!("{}", text);
             io::stdout().flush()?;
+            generated_text.push_str(&text);
         }
 
         let eos_id = self.tokenizer.eos_token_id().unwrap_or(2);
@@ -144,6 +153,11 @@ impl TextGenerator {
         // Autoregressive decode
         for i in 0..max_tokens - 1 {
             if next_token == eos_id {
+                break;
+            }
+
+            // Check stop sequences
+            if stop_conditions.iter().any(|sc| sc.should_stop(next_token, &generated_text, generated_tokens)) {
                 break;
             }
 
@@ -172,6 +186,12 @@ impl TextGenerator {
             if let Ok(Some(text)) = decoder.step(next_token) {
                 print!("{}", text);
                 io::stdout().flush()?;
+                generated_text.push_str(&text);
+
+                // Check stop sequences after new text
+                if stop_conditions.iter().any(|sc| sc.should_stop(next_token, &generated_text, generated_tokens)) {
+                    break;
+                }
             }
         }
 
@@ -255,7 +275,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         print!("Mistral: ");
         io::stdout().flush()?;
 
-        if let Err(e) = generator.generate(&prompt, 1024, 0.7, 0.9) {
+        if let Err(e) = generator.generate(&prompt, 1024, 0.7, 0.9, &["</s>", "[/INST]"]) {
             println!("Error: {}", e);
         }
     }
