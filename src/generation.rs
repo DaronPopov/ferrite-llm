@@ -179,3 +179,116 @@ impl GenerationStats {
         );
     }
 }
+
+/// Trait for models that can perform streaming inference
+pub trait InferenceModel {
+    /// Perform forward pass for a single token at a given position
+    fn forward(&mut self, token: u32, pos: usize) -> Result<candle_core::Tensor, Box<dyn std::error::Error>>;
+    /// Prefill the model with multiple tokens (prompt processing)
+    fn prefill(&mut self, tokens: &[u32]) -> Result<candle_core::Tensor, Box<dyn std::error::Error>>;
+}
+
+/// A high-level streaming inference engine
+pub struct StreamingInference<'a, M: InferenceModel> {
+    model: &'a mut M,
+    sampler: crate::Sampler,
+    config: GenerationConfig,
+    stats: GenerationStats,
+    decoder: crate::tokenizer::StreamDecoder,
+    pos: usize,
+    next_token: Option<u32>,
+    eos_token: u32,
+    all_tokens: Vec<u32>,
+    finished: bool,
+}
+
+impl<'a, M: InferenceModel> StreamingInference<'a, M> {
+    /// Create a new streaming inference session
+    pub fn new(
+        model: &'a mut M,
+        tokenizer: &'a crate::Tokenizer,
+        prompt: &str,
+        config: GenerationConfig,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let encoding = tokenizer.encode(prompt)?;
+        let tokens = encoding.ids;
+        let eos_token = tokenizer.eos_token_id().unwrap_or(2);
+        
+        let mut stats = GenerationStats::new(tokens.len());
+        stats.start();
+
+        // Prefill phase
+        let logits = model.prefill(&tokens)?;
+        stats.end_prefill();
+
+        let mut sampler = crate::Sampler::new(crate::SamplerConfig {
+            temperature: config.temperature,
+            top_p: config.top_p,
+            top_k: config.top_k,
+            repetition_penalty: config.repetition_penalty,
+            seed: config.seed,
+        });
+
+        // Sample first token
+        let next_token = sampler.sample(&logits, &tokens)?;
+        
+        let decoder = tokenizer.decode_stream(&tokens, true);
+        let pos = tokens.len();
+
+        Ok(Self {
+            model,
+            sampler,
+            config,
+            stats,
+            decoder,
+            pos,
+            next_token: Some(next_token),
+            eos_token,
+            all_tokens: tokens,
+            finished: false,
+        })
+    }
+
+    /// Generate the next token and return its text
+    pub fn next(&mut self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        if self.finished {
+            return Ok(None);
+        }
+
+        let current_token = match self.next_token {
+            Some(t) => t,
+            None => return Ok(None),
+        };
+
+        if current_token == self.eos_token || self.stats.generated_tokens >= self.config.max_tokens {
+            self.finished = true;
+            return Ok(self.decoder.flush()?);
+        }
+
+        // Add token to history
+        self.all_tokens.push(current_token);
+        self.stats.record_token();
+
+        // Get text for current token
+        let text = self.decoder.step(current_token)?;
+
+        // Prepare for next token
+        let logits = self.model.forward(current_token, self.pos)?;
+        self.pos += 1;
+
+        // Sample next token with repetition penalty
+        self.next_token = Some(self.sampler.sample(&logits, &self.all_tokens)?);
+
+        Ok(text.or(Some(String::new()))) // Return empty string if no full text yet
+    }
+
+    /// Get current generation statistics
+    pub fn stats(&self) -> &GenerationStats {
+        &self.stats
+    }
+
+    /// Check if complete
+    pub fn is_finished(&self) -> bool {
+        self.finished
+    }
+}
