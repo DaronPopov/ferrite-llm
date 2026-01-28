@@ -1,0 +1,22 @@
+# Build artifacts
+build/
+*.o
+*.so
+*.dll
+*.ptx
+*.d
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Legacy/test directories
+legacy/
+projects/
+showcase/

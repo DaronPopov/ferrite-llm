@@ -1,0 +1,30 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+Cargo.lock
+
+# spcpp build outputs
+kernels/external/spcpp/build/
+kernels/external/spcpp/bin/
+*.so
+*.ptx
+*.o
+*.cubin
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local

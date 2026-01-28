@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: Check & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Check formatting
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+      - name: Build
+        run: cargo build
+
+      - name: Run tests (CPU only)
+        run: cargo test -- --skip gpu --skip cuda
+
+  build-cuda:
+    name: Build with CUDA
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.11
+        with:
+          cuda: '12.2.0'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Build spcpp
+        run: |
+          cd kernels/external/spcpp
+          mkdir -p build/lib
+          g++ -std=c++17 -O3 -fPIC -shared \
+            -I include \
+            -I $CUDA_PATH/include \
+            -L $CUDA_PATH/lib64 \
+            -o build/lib/spcpp_launcher.so \
+            spcpp_launcher.cpp spcpp_bridge.cpp \
+            -lcuda -lcudart -lcublas -lcublasLt -ldl
+
+      - name: Build Ferrite
+        run: cargo build --release
+
+      - name: Verify binary
+        run: |
+          ls -la target/release/
+          file target/release/ferrite || true

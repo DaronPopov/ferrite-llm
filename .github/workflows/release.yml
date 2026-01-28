@@ -1,0 +1,153 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v0.1.0)'
+        required: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        # Build for common GPU architectures
+        sm_version: ['70', '75', '80', '86', '89', '90']
+        include:
+          - sm_version: '70'
+            gpu_name: 'Volta (V100)'
+          - sm_version: '75'
+            gpu_name: 'Turing (RTX 20xx)'
+          - sm_version: '80'
+            gpu_name: 'Ampere (A100)'
+          - sm_version: '86'
+            gpu_name: 'Ampere (RTX 30xx)'
+          - sm_version: '89'
+            gpu_name: 'Ada Lovelace (RTX 40xx)'
+          - sm_version: '90'
+            gpu_name: 'Hopper (H100)'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install CUDA Toolkit
+        uses: Jimver/cuda-toolkit@v0.2.11
+        with:
+          cuda: '12.2.0'
+          method: 'network'
+          sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev"]'
+
+      - name: Install Rust
+        uses: dtolnay/rust-action@stable
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
+      - name: Build spcpp for sm_${{ matrix.sm_version }}
+        run: |
+          cd kernels/external/spcpp
+          mkdir -p build/lib
+
+          # Override SM version for this build
+          export SM_VER=${{ matrix.sm_version }}
+
+          # Build spcpp_launcher.so
+          g++ -std=c++17 -O3 -fPIC -shared \
+            -I include \
+            -I $CUDA_PATH/include \
+            -L $CUDA_PATH/lib64 \
+            -o build/lib/spcpp_launcher.so \
+            spcpp_launcher.cpp spcpp_bridge.cpp \
+            -lcuda -lcudart -lcublas -lcublasLt -ldl
+
+          echo "Built spcpp_launcher.so for sm_${{ matrix.sm_version }}"
+
+      - name: Build Ferrite
+        run: cargo build --release
+
+      - name: Package release
+        run: |
+          RELEASE_DIR="ferrite-linux-x86_64-sm${{ matrix.sm_version }}"
+          mkdir -p "$RELEASE_DIR/bin"
+          mkdir -p "$RELEASE_DIR/lib"
+          mkdir -p "$RELEASE_DIR/kernels"
+
+          cp target/release/ferrite "$RELEASE_DIR/bin/" || true
+          cp -r target/release/lib* "$RELEASE_DIR/lib/" 2>/dev/null || true
+          cp kernels/external/spcpp/build/lib/*.so "$RELEASE_DIR/lib/" 2>/dev/null || true
+          cp -r kernels/external/spcpp "$RELEASE_DIR/kernels/"
+
+          # Create tarball
+          tar -czvf "$RELEASE_DIR.tar.gz" "$RELEASE_DIR"
+
+          echo "Created $RELEASE_DIR.tar.gz for ${{ matrix.gpu_name }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ferrite-linux-x86_64-sm${{ matrix.sm_version }}
+          path: ferrite-linux-x86_64-sm${{ matrix.sm_version }}.tar.gz
+
+  create-release:
+    needs: build-linux
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: Ferrite ${{ github.event.inputs.version || github.ref_name }}
+          body: |
+            ## Ferrite Release
+
+            High-performance GPU ML runtime for Rust.
+
+            ### Downloads
+
+            Choose the binary matching your GPU:
+
+            | GPU Generation | Compute Capability | Download |
+            |---------------|-------------------|----------|
+            | Volta (V100) | sm_70 | `ferrite-linux-x86_64-sm70.tar.gz` |
+            | Turing (RTX 20xx) | sm_75 | `ferrite-linux-x86_64-sm75.tar.gz` |
+            | Ampere (A100) | sm_80 | `ferrite-linux-x86_64-sm80.tar.gz` |
+            | Ampere (RTX 30xx) | sm_86 | `ferrite-linux-x86_64-sm86.tar.gz` |
+            | Ada Lovelace (RTX 40xx) | sm_89 | `ferrite-linux-x86_64-sm89.tar.gz` |
+            | Hopper (H100) | sm_90 | `ferrite-linux-x86_64-sm90.tar.gz` |
+
+            ### One-line install (auto-detects GPU)
+
+            ```bash
+            curl -sSf https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh
+            ```
+
+            ### Requirements
+
+            - Linux x86_64
+            - NVIDIA GPU (Compute Capability 6.0+)
+            - CUDA Toolkit 11.0+
+            - NVIDIA Driver
+
+          files: |
+            artifacts/**/*.tar.gz
+          draft: false
+          prerelease: false

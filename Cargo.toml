@@ -1,0 +1,28 @@
+[package]
+name = "ferrite"
+version = "0.1.0"
+edition = "2021"
+description = "High-performance GPU ML runtime - Rust safety, CUDA speed, zero-copy execution"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DaronPopov/ferrite"
+homepage = "https://github.com/DaronPopov/ferrite"
+documentation = "https://github.com/DaronPopov/ferrite"
+readme = "README.md"
+keywords = ["gpu", "cuda", "ml", "deep-learning", "neural-network"]
+categories = ["science", "algorithms", "hardware-support"]
+exclude = [
+    ".github/*",
+    "examples/*",
+    "tests/*",
+    "benches/*",
+]
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+cudarc = { version = "0.12", features = ["cuda-version-from-build-system", "driver", "nvrtc"] } 
+libloading = "0.8"
+threadpool = "1.8"
+fxhash = "0.2"
+regex = "1.5"
