@@ -5,7 +5,7 @@
 
 use candle_core::{quantized::gguf_file, Device, Tensor};
 use candle_transformers::generation::LogitsProcessor;
-use candle_transformers::models::quantized_llama::ModelWeights;
+use candle_transformers::models::quantized_phi::ModelWeights;
 use ferrite::Tokenizer;
 use std::io::{self, Write};
 use std::path::PathBuf;
@@ -181,8 +181,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         _ => {}
     }
 
-    // Download quantized GGUF model
-    let gguf_repo = "TheBloke/phi-2-GGUF";
+    // Download quantized GGUF model (MaziyarPanahi has proper phi2.* metadata keys)
+    let gguf_repo = "MaziyarPanahi/phi-2-GGUF";
     let gguf_file = "phi-2.Q4_K_M.gguf";
 
     println!("\n[Download] Getting quantized model...");
