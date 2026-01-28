@@ -59,6 +59,10 @@ path = "chatbots/mistral/mistral_quantized_inference.rs"
 name = "mistral_streaming"
 path = "chatbots/mistral/mistral_streaming.rs"
 
+[[bin]]
+name = "mistral_stress_test"
+path = "chatbots/mistral/mistral_stress_test.rs"
+
 # ============================================================================
 # Chatbots - Qwen Family
 # ============================================================================
