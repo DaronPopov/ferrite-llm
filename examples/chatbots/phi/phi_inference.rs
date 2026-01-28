@@ -183,16 +183,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("╚══════════════════════════════════════════════════════════════╝\n");
 
     let device = Device::cuda_if_available(0)?;
-    let precision = match &device {
-        Device::Cuda(_) => {
-            println!("[Init] Using CUDA with FP16");
-            Precision::F16
-        }
-        Device::Cpu => {
-            println!("[Init] Using CPU with FP32");
-            Precision::F32
-        }
-        _ => Precision::F32,
+    // Phi-2 requires F32 due to RoPE implementation limitations
+    let precision = Precision::F32;
+    match &device {
+        Device::Cuda(_) => println!("[Init] Using CUDA with F32 (Phi-2 requires F32 for RoPE)"),
+        Device::Cpu => println!("[Init] Using CPU with F32"),
+        _ => {}
     };
 
     let model_id = "microsoft/phi-2";
