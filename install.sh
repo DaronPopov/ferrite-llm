@@ -22,11 +22,16 @@ fi
 INSTALL_DIR="${FERRITE_INSTALL_DIR:-$HOME/.ferrite}"
 echo "[2/4] Cloning ferrite to $INSTALL_DIR..."
 
-if [ -d "$INSTALL_DIR" ]; then
+if [ -d "$INSTALL_DIR/.git" ]; then
     echo "  Updating existing installation..."
     cd "$INSTALL_DIR"
     git pull --ff-only
 else
+    if [ -d "$INSTALL_DIR" ]; then
+        echo "  Notice: $INSTALL_DIR exists but is not a git repository."
+        echo "  Moving existing directory to $INSTALL_DIR.old"
+        mv "$INSTALL_DIR" "${INSTALL_DIR}.old"
+    fi
     git clone https://github.com/DaronPopov/ferrite.git "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
