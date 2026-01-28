@@ -226,7 +226,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         print!("Phi-2: ");
         io::stdout().flush()?;
 
-        if let Err(e) = generator.generate(&prompt, 256, 0.7, 0.9) {
+        if let Err(e) = generator.generate(&prompt, 1024, 0.7, 0.9) {
             println!("Error: {}", e);
         }
     }
