@@ -1,0 +1,19 @@
+# Build artifacts
+/target/
+/examples/target/
+
+# Cargo lock for library (keep for workspace)
+# Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archives
+/examples/archive/

@@ -1,0 +1,34 @@
+[workspace]
+members = [".", "examples"]
+
+[package]
+name = "ferrite"
+version = "0.2.0"
+edition = "2021"
+description = "Lightweight LLM inference utilities for Candle"
+license = "MIT"
+repository = "https://github.com/user/ferrite"
+keywords = ["llm", "inference", "candle", "rust", "gpu"]
+categories = ["science", "machine-learning"]
+
+[features]
+default = ["cuda"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+metal = ["candle-core/metal", "candle-nn/metal", "candle-transformers/metal"]
+
+[dependencies]
+# Candle - Pure Rust ML
+candle-core = "0.8"
+candle-nn = "0.8"
+candle-transformers = "0.8"
+
+# Tokenization
+llm-tokenizer = "1.0"
+
+# Utilities
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[dev-dependencies]
+tokio-test = "0.4"
