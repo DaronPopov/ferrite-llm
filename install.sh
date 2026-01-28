@@ -32,7 +32,12 @@ else
         echo "  Moving existing directory to $INSTALL_DIR.old"
         mv "$INSTALL_DIR" "${INSTALL_DIR}.old"
     fi
-    git clone https://github.com/DaronPopov/ferrite.git "$INSTALL_DIR"
+    REPO_URL="https://github.com/DaronPopov/ferrite.git"
+    if [ -n "$GITHUB_TOKEN" ]; then
+        REPO_URL="https://$GITHUB_TOKEN@github.com/DaronPopov/ferrite.git"
+        echo "  Using provided GITHUB_TOKEN for cloning..."
+    fi
+    git clone "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
 
