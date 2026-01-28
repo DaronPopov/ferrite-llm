@@ -74,3 +74,7 @@ path = "chatbots/gemma/gemma_inference.rs"
 [[bin]]
 name = "phi_inference"
 path = "chatbots/phi/phi_inference.rs"
+
+[[bin]]
+name = "phi_quantized_inference"
+path = "chatbots/phi/phi_quantized_inference.rs"

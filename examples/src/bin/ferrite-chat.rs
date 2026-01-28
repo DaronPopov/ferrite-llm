@@ -185,7 +185,8 @@ fn interactive_menu() {
     println!("  [3] Mistral 7B Q4     - Quantized, ~4GB VRAM");
     println!("  [4] Qwen2 0.5B        - Tiny multilingual");
     println!("  [5] Gemma 2B          - Google (requires token)");
-    println!("  [6] Phi-2             - Strong reasoning");
+    println!("  [6] Phi-2             - Strong reasoning (~11GB)");
+    println!("  [7] Phi-2 Q4          - Quantized, ~2GB VRAM");
     println!();
     println!("  [t] Setup HuggingFace token");
     println!("  [q] Quit");
@@ -204,6 +205,7 @@ fn interactive_menu() {
         "4" => run_model("qwen", false),
         "5" => run_model("gemma", false),
         "6" => run_model("phi", false),
+        "7" => run_model("phi", true),
         "t" | "T" => handle_login(),
         "q" | "Q" => println!("Goodbye!"),
         _ => eprintln!("Invalid choice"),
@@ -251,7 +253,8 @@ fn run_model(name: &str, quantized: bool) {
         (ModelFamily::Mistral, false) => "mistral_inference",
         (ModelFamily::Qwen, _) => "qwen_inference",
         (ModelFamily::Gemma, _) => "gemma_inference",
-        (ModelFamily::Phi, _) => "phi_inference",
+        (ModelFamily::Phi, true) => "phi_quantized_inference",
+        (ModelFamily::Phi, false) => "phi_inference",
         (ModelFamily::Gpt, _) => "gpt_inference",
     };
 
