@@ -1,0 +1,52 @@
+// Ferrite Neural Inference Runtime
+// WIT Component Model Interface Definition
+
+package ferrite:inference@0.1.0;
+
+/// Core inference interface
+interface inference {
+    /// Generation configuration
+    record generation-config {
+        temperature: f32,
+        top-p: f32,
+        top-k: u32,
+        max-tokens: u32,
+        seed: option<u64>,
+    }
+
+    /// Model handle (opaque resource managed by host)
+    resource model {
+        /// Generate text from a prompt
+        /// Returns generated text as a single string
+        generate: func(prompt: string, config: generation-config) -> result<string, string>;
+
+        /// Stream tokens one at a time (returns list for prototype)
+        /// In future: use WASI stream interface
+        generate-stream: func(prompt: string, config: generation-config) -> result<list<string>, string>;
+    }
+
+    /// Load a model by name with optional authentication token
+    /// Examples: "qwen2-0.5b", "mistral-7b-q4", "tinyllama"
+    load-model: func(model-name: string, auth-token: option<string>) -> result<model, string>;
+}
+
+/// Tokenization interface
+interface tokenizer {
+    /// Encode text to token IDs
+    encode: func(text: string) -> list<u32>;
+
+    /// Decode token IDs to text
+    decode: func(tokens: list<u32>) -> string;
+
+    /// Decode a single token (for streaming)
+    decode-token: func(token: u32) -> string;
+}
+
+/// Main world for ferrite guest modules
+world ferrite-guest {
+    import inference;
+    import tokenizer;
+
+    /// Guest modules export a run function
+    export run: func() -> result<_, string>;
+}

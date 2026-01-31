@@ -1,0 +1,15 @@
+[package]
+name = "ferrite-sdk"
+version = "0.3.0"
+edition = "2021"
+description = "Guest SDK for writing neural inference WASM modules"
+license = "MIT"
+repository = "https://github.com/yourusername/ferrite"
+keywords = ["wasm", "sdk", "inference", "guest", "component-model"]
+categories = ["wasm", "development-tools"]
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+wit-bindgen = { version = "0.37", default-features = false, features = ["macros"] }

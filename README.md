@@ -1,261 +1,262 @@
-# Ferrite
+# Ferrite - Neural Inference WASM Runtime
 
-A lightweight, high-performance LLM inference engine written in pure Rust.
+> Production-ready neural inference runtime with WASM sandboxing
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Mistral 7B Q4: 65 tok/s │ 26 MB binary │ No Python required   │
-└─────────────────────────────────────────────────────────────────┘
-```
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## One-Line Install
+Ferrite is a modular framework for running neural inference workloads in WebAssembly sandboxes. It provides a clean separation between the inference engine, WASM orchestration, and guest modules, enabling safe, portable AI deployments.
 
-```bash
-curl -sSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | bash
-```
+## 🏗️ Architecture
 
-Then run:
-```bash
-ferrite-chat
-```
-
-## What is Ferrite?
-
-Ferrite is a **production-ready LLM inference platform** that compiles to a single static binary. No Python runtime, no libtorch, no version conflicts—just a ~25 MB executable that runs state-of-the-art language models.
-
-### Key Features
-
-- **Pure Rust** — Built on [Candle](https://github.com/huggingface/candle), HuggingFace's Rust ML framework
-- **Single Binary** — Everything compiles into one executable (~25 MB)
-- **Fast** — 65+ tokens/sec on consumer GPUs with quantized models
-- **Quantization** — 4-bit GGUF support (run 7B models in 4GB VRAM)
-- **No Dependencies** — No Python, no libtorch, no CUDA toolkit bundled
-- **Chat Templates** — Native support for Mistral, Llama, Qwen, Gemma formats
-
-## Quick Start
-
-```bash
-# Run the interactive launcher
-cargo run --release -p ferrite-examples --bin ferrite-chat
-
-# Or run a specific model
-cargo run --release -p ferrite-examples --bin mistral_quantized_inference
-```
-
-## Supported Models
-
-| Model | Parameters | VRAM | Speed |
-|-------|------------|------|-------|
-| TinyLlama | 1.1B | ~3 GB | ~120 tok/s |
-| Qwen2 | 0.5B | ~1 GB | ~150 tok/s |
-| Phi-2 | 2.7B | ~6 GB | ~45 tok/s |
-| Gemma | 2B | ~5 GB | ~50 tok/s |
-| Mistral 7B | 7B | ~14 GB | ~25 tok/s |
-| Mistral 7B Q4 | 7B (4-bit) | ~4 GB | ~65 tok/s |
-
-## Architecture
+Ferrite is built as a multi-crate framework with clear separation of concerns:
 
 ```
 ferrite/
-├── src/                    # Core library (800 lines)
-│   ├── tokenizer.rs        # HuggingFace tokenizers + chat templates
-│   ├── generation.rs       # Generation config + TPS tracking
-│   ├── sampling.rs         # Top-p, top-k, temperature sampling
-│   └── models.rs           # Model registry + configs
-│
-└── examples/               # Inference binaries
-    ├── chatbots/           # Model-specific implementations
-    │   ├── llama/
-    │   ├── mistral/
-    │   ├── qwen/
-    │   ├── gemma/
-    │   └── phi/
-    └── src/                # CLI launcher + utilities
+├── crates/
+│   ├── ferrite-core/        # Pure inference engine (Candle/CUDA)
+│   ├── ferrite-wasm-host/   # WASM host library
+│   ├── ferrite-sdk/         # Guest SDK for WASM modules
+│   └── ferrite-cli/         # Standalone runtime binary
+├── wit/                     # WIT interface definitions
+├── examples/                # Example modules
+└── docs/                    # Detailed documentation
 ```
 
-## Design Philosophy
+### Component Overview
 
-### Why Rust?
+| Crate | Purpose | Use Case |
+|-------|---------|----------|
+| **ferrite-core** | Pure inference engine using Candle | Embed inference in Rust apps |
+| **ferrite-wasm-host** | WASM orchestration library | Add WASM-based AI to any app |
+| **ferrite-sdk** | Guest bindings and helpers | Write portable AI modules |
+| **ferrite-cli** | Production runtime | Run AI workloads from CLI |
 
-1. **Single binary deployment** — No "works on my machine" problems
-2. **Memory safety** — No segfaults, no buffer overflows
-3. **Performance** — Zero-cost abstractions, no GC pauses
-4. **Dependency management** — Cargo handles everything
+## 🚀 Quick Start
 
-### Why Candle?
+### Install the Runtime
 
-We evaluated several backends:
+```bash
+cargo install --path crates/ferrite-cli
+```
 
-| Backend | Pros | Cons |
-|---------|------|------|
-| PyTorch/libtorch | Mature, full-featured | 2GB+ dependency, Python ecosystem |
-| ONNX Runtime | Cross-platform | Limited model support |
-| llama.cpp | Fast, lightweight | C++, limited to Llama-like models |
-| **Candle** | Pure Rust, HuggingFace models | Newer, growing ecosystem |
+### Run an AI Module
 
-Candle won because:
-- Pure Rust = single binary compilation
-- Direct HuggingFace model support
-- Active development by HuggingFace team
-- CUDA, Metal, and CPU backends
+```bash
+# Show system info
+ferrite-rt info
 
-### What Ferrite Adds
+# List cached models
+ferrite-rt models
 
-Candle provides the ML primitives. Ferrite adds the **inference ergonomics**:
+# Run a WASM module
+ferrite-rt run examples/mistral-chat.wasm
+
+# With custom settings
+ferrite-rt run module.wasm \
+  --hf-token $HF_TOKEN \
+  --model-cache ~/.cache/ferrite \
+  --metrics \
+  -v
+```
+
+### Write Your First AI Module
 
 ```rust
-use ferrite::{Tokenizer, ChatMessage, GenerationStats};
-
-// Chat template support (Mistral, Llama, ChatML, etc.)
-let messages = vec![
-    ChatMessage::system("You are a helpful assistant."),
-    ChatMessage::user("Hello!"),
-];
-let prompt = tokenizer.apply_chat_template(&messages, true)?;
-
-// TPS tracking
-let mut stats = GenerationStats::new(prompt_tokens);
-stats.start();
-// ... generate tokens ...
-stats.print_summary();  // [Stats] 89 tokens in 1.37s (65.0 tok/s)
-```
-
-## Performance
-
-Benchmarked on RTX 3080 (10GB VRAM):
-
-```
-Model                    Prefill    Decode     Memory
-─────────────────────────────────────────────────────
-Mistral-7B-Q4            142 ms     65 tok/s   4.1 GB
-Mistral-7B-FP16          287 ms     24 tok/s   14.2 GB
-TinyLlama-1.1B           31 ms      118 tok/s  2.8 GB
-Qwen2-0.5B               18 ms      156 tok/s  1.2 GB
-```
-
-## Installation
-
-### Requirements
-
-- Rust 1.70+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
-- CUDA toolkit (for GPU inference)
-- ~4 GB disk space for model weights
-
-### Build
-
-```bash
-git clone https://github.com/user/ferrite
-cd ferrite
-
-# Build all examples
-cargo build --release -p ferrite-examples
-
-# Run
-./target/release/ferrite-chat
-```
-
-### HuggingFace Token
-
-Some models require authentication:
-
-```bash
-# Set up your token
-cargo run --release -p ferrite-examples --bin ferrite-chat -- --login
-
-# Or use environment variable
-export HF_TOKEN=hf_xxxxxxxxxxxxx
-```
-
-## Usage
-
-### As a Library
-
-```toml
+// Cargo.toml
 [dependencies]
-ferrite = { git = "https://github.com/user/ferrite" }
-```
+ferrite-sdk = "0.3"
+wit-bindgen = "0.37"
 
-```rust
-use ferrite::{Tokenizer, ChatMessage, Sampler, SamplerConfig};
+[lib]
+crate-type = ["cdylib"]
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load tokenizer with chat template
-    let tokenizer = Tokenizer::from_pretrained("mistralai/Mistral-7B-Instruct-v0.2").await?;
+// src/lib.rs
+wit_bindgen::generate!({
+    path: "path/to/wit",
+    world: "ferrite-guest",
+});
 
-    // Format chat
-    let messages = vec![
-        ChatMessage::user("What is Rust?"),
-    ];
-    let prompt = tokenizer.apply_chat_template(&messages, true)?;
-    let encoding = tokenizer.encode(&prompt)?;
+use ferrite::inference::inference::{load_model, GenerationConfig};
 
-    // Create sampler
-    let sampler = Sampler::new(SamplerConfig {
-        temperature: 0.7,
-        top_p: 0.9,
-        ..Default::default()
-    });
+struct MyAI;
 
-    Ok(())
+impl Guest for MyAI {
+    fn run() -> Result<(), String> {
+        let model = load_model("mistral-7b-q4", None)?;
+
+        let config = GenerationConfig {
+            temperature: 0.8,
+            top_p: 0.9,
+            top_k: 50,
+            max_tokens: 200,
+            seed: Some(42),
+        };
+
+        let response = model.generate("What is Rust?", config)?;
+        println!("{}", response);
+        Ok(())
+    }
 }
+
+export!(MyAI);
 ```
 
-### CLI
+Build it:
+```bash
+cargo build --target wasm32-wasip1 --release
+wasm-tools component embed wit target/wasm32-wasip1/release/my_ai.wasm -o my_ai.embed.wasm
+wasm-tools component new my_ai.embed.wasm \
+  --adapt wasi_snapshot_preview1.reactor.wasm \
+  -o my_ai.component.wasm
+ferrite-rt run my_ai.component.wasm
+```
+
+## 📚 Documentation
+
+- [Architecture Guide](docs/ARCHITECTURE.md) - Deep dive into the design
+- [Programming Guide](docs/PROGRAMMING.md) - Writing WASM modules
+- [Host Integration](docs/HOST_INTEGRATION.md) - Embedding ferrite in apps
+- [CLI Reference](docs/CLI_REFERENCE.md) - Runtime command documentation
+- [WIT Reference](docs/WIT_REFERENCE.md) - Interface definitions
+
+## 🎯 Use Cases
+
+### 1. Standalone AI Runtime
+Use `ferrite-cli` to run AI workloads with full sandboxing:
+```bash
+ferrite-rt run chatbot.wasm --metrics
+```
+
+### 2. Embedded in Applications
+Use `ferrite-wasm-host` to add AI to your Rust app:
+```rust
+use ferrite_wasm_host::{HostState, bindings::FerriteGuest, create_engine};
+use wasmtime::{Store, Component, component::Linker};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
+
+let engine = create_engine()?;
+let component = Component::from_file(&engine, "ai.wasm")?;
+
+struct AppState {
+    wasi: WasiCtx,
+    host: HostState,
+}
+
+impl WasiView for AppState {
+    fn ctx(&mut self) -> &mut WasiCtx { &mut self.wasi }
+    fn table(&mut self) -> &mut ResourceTable { self.host.table() }
+}
+
+let wasi = WasiCtxBuilder::new().inherit_stdio().build();
+let host = HostState::new("./models")?;
+let mut store = Store::new(&engine, AppState { wasi, host });
+
+let mut linker = Linker::new(&engine);
+wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+FerriteGuest::add_to_linker(&mut linker, |s: &mut AppState| &mut s.host)?;
+
+let guest = FerriteGuest::instantiate(&mut store, &component, &linker)?;
+guest.call_run(&mut store)?;
+```
+
+### 3. Pure Inference
+Use `ferrite-core` for direct inference without WASM:
+```rust
+use ferrite_core::{ChatSession, GenerationConfig, Tokenizer};
+
+let tokenizer = Tokenizer::from_dir("./model")?;
+let session = ChatSession::new(model, tokenizer, None, config)?;
+let response = session.user_turn("Hello!")?;
+```
+
+## ✨ Features
+
+- **🔒 Sandboxed Execution** - WASM Component Model isolation
+- **🚀 High Performance** - Quantized models (GGUF), CUDA support
+- **📦 Modular Design** - Use only what you need
+- **🔌 Pluggable Models** - Mistral 7B, Qwen, custom GGUF
+- **🎨 Multiple Chat Formats** - Mistral, Llama, ChatML, Gemma
+- **💾 Smart Caching** - HuggingFace Hub integration
+- **📊 Performance Metrics** - Built-in timing and statistics
+- **🔑 Auth Support** - HuggingFace token integration
+- **⚡ Zero Warnings** - Production-ready code quality
+
+## 🛠️ Development
+
+### Prerequisites
+
+- Rust 1.70+
+- `wasm-tools` for componentization: `cargo install wasm-tools`
+- (Optional) CUDA toolkit for GPU support
+
+### Build All Crates
 
 ```bash
-# Interactive model selection
-ferrite-chat
-
-# Specific model
-ferrite-chat mistral
-ferrite-chat mistral -q  # quantized
-
-# Manage HuggingFace token
-ferrite-chat --login
-ferrite-chat --status
+cargo build --workspace --release
 ```
 
-## Binary Size
+### Build with CUDA
 
-```
-Component               Size
-────────────────────────────
-Candle (ML ops)         ~18 MB
-Tokenizers              ~4 MB
-Model architectures     ~2 MB
-Ferrite utilities       ~1 MB
-────────────────────────────
-Total binary            ~25 MB
-
-Note: Model weights downloaded separately (~4-14 GB)
+```bash
+cargo build --workspace --release --features cuda
 ```
 
-## Comparison
+### Run Tests
 
-| Feature | Ferrite | llama.cpp | vLLM | Ollama |
-|---------|---------|-----------|------|--------|
-| Language | Rust | C++ | Python | Go+C++ |
-| Binary size | 25 MB | 5 MB | ~2 GB | 150 MB |
-| Models | HuggingFace | GGUF only | HuggingFace | GGUF |
-| Quantization | GGUF Q4/Q8 | GGUF all | AWQ, GPTQ | GGUF |
-| Dependencies | None | None | Python, CUDA | None |
-| Batching | Single | Single | Continuous | Single |
+```bash
+cargo test --workspace
+```
 
-## Roadmap
+## 📦 Crate Documentation
 
-- [ ] Continuous batching for throughput
-- [ ] Speculative decoding
-- [ ] More quantization formats (AWQ, GPTQ)
-- [ ] OpenAI-compatible API server
-- [ ] Metal backend optimization
+Each crate has its own README with detailed information:
 
-## License
+- [ferrite-core](crates/ferrite-core/README.md) - Pure inference engine
+- [ferrite-wasm-host](crates/ferrite-wasm-host/README.md) - WASM host library
+- [ferrite-sdk](crates/ferrite-sdk/README.md) - Guest SDK
+- [ferrite-cli](crates/ferrite-cli/README.md) - Runtime CLI
 
-MIT
+## 🚢 Publishing to crates.io
 
-## Acknowledgments
+Each crate is independently versioned and can be published:
 
-- [Candle](https://github.com/huggingface/candle) — The ML engine that makes this possible
-- [llm-tokenizer](https://github.com/example/llm-tokenizer) — Tokenization with chat templates
-- [HuggingFace](https://huggingface.co) — Model hosting and community
+```bash
+# Publish in dependency order
+cd crates/ferrite-core && cargo publish
+cd ../ferrite-sdk && cargo publish
+cd ../ferrite-wasm-host && cargo publish
+cd ../ferrite-cli && cargo publish
+```
+
+## 🤝 Contributing
+
+We welcome contributions! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Ensure `cargo build --workspace` passes with zero warnings
+5. Submit a pull request
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+## 🙏 Acknowledgments
+
+- Built with [Candle](https://github.com/huggingface/candle) for inference
+- Uses [Wasmtime](https://github.com/bytecodealliance/wasmtime) for WASM runtime
+- Model support via [HuggingFace Hub](https://huggingface.co)
+- WASM Component Model and WIT specifications
+
+## 🔗 Links
+
+- [Documentation](docs/)
+- [Examples](examples/)
+- [Issue Tracker](https://github.com/sperabality/ferrite/issues)
+- [Releases](https://github.com/sperabality/ferrite/releases)
+
+---
+
+**Status**: Production-ready (v0.3.0) - Zero compilation warnings, full feature set

@@ -1,0 +1,41 @@
+[package]
+name = "ferrite-cli"
+version = "0.3.0"
+edition = "2021"
+description = "Ferrite CLI - Standalone WASM runtime for neural inference"
+license = "MIT"
+repository = "https://github.com/sperabality/ferrite"
+homepage = "https://github.com/sperabality/ferrite"
+keywords = ["cli", "wasm", "inference", "runtime"]
+categories = ["command-line-utilities"]
+
+[[bin]]
+name = "ferrite-rt"
+path = "src/main.rs"
+
+[dependencies]
+# Ferrite host library
+ferrite-wasm-host = { path = "../ferrite-wasm-host" }
+
+# CLI
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Utilities
+dirs = "5.0"
+walkdir = "2.5"
+
+# WASM runtime
+wasmtime = { version = "27", features = ["component-model", "cranelift"] }
+wasmtime-wasi = "27"
+
+# Optional CUDA support (re-exported for feature detection)
+[dependencies.candle-core]
+version = "0.8"
+optional = true
+
+[features]
+cuda = ["candle-core/cuda", "ferrite-wasm-host/cuda"]
+default = []

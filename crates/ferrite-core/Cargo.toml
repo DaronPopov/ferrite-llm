@@ -1,0 +1,33 @@
+[package]
+name = "ferrite-core"
+version = "0.3.0"
+edition = "2021"
+description = "Pure Rust LLM inference engine - Core library with GGUF, CUDA, and quantized model support"
+license = "MIT"
+repository = "https://github.com/yourusername/ferrite"
+keywords = ["llm", "inference", "cuda", "gguf", "quantized"]
+categories = ["science", "machine-learning"]
+
+[features]
+default = ["cuda"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda", "cudarc"]
+
+[dependencies]
+# Candle - Pure Rust ML
+candle-core = "0.8"
+candle-nn = "0.8"
+candle-transformers = "0.8"
+
+# CUDA support for custom kernels
+cudarc = { version = "0.13", features = ["f16"], optional = true }
+
+# Tokenization
+llm-tokenizer = "1.0"
+
+# Utilities
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+
+[dev-dependencies]
+tokio-test = "0.4"

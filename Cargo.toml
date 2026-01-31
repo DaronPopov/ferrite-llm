@@ -1,33 +1,33 @@
 [workspace]
-members = [".", "examples"]
+members = [
+    "crates/ferrite-core",
+    "crates/ferrite-wasm-host",
+    "crates/ferrite-sdk",
+    "crates/ferrite-cli",
+    "examples/native",
+    "examples/wasm/hello-inference",
+    "examples/wasm/mistral-inference",
+]
+resolver = "2"
 
-[package]
-name = "ferrite"
-version = "0.2.0"
+[workspace.package]
+version = "0.3.0"
 edition = "2021"
-description = "Lightweight LLM inference utilities for Candle"
 license = "MIT"
-repository = "https://github.com/user/ferrite"
-keywords = ["llm", "inference", "candle", "rust", "gpu"]
-categories = ["science", "machine-learning"]
+repository = "https://github.com/yourusername/ferrite"
 
-[features]
-default = ["cuda"]
-cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
-
-[dependencies]
-# Candle - Pure Rust ML
+# Shared dependencies across workspace
+[workspace.dependencies]
 candle-core = "0.8"
 candle-nn = "0.8"
 candle-transformers = "0.8"
-
-# Tokenization
-llm-tokenizer = "1.0"
-
-# Utilities
+anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tracing = "0.1"
 
-[dev-dependencies]
-tokio-test = "0.4"
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

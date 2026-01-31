@@ -1,0 +1,40 @@
+[package]
+name = "ferrite-wasm-host"
+version = "0.3.0"
+edition = "2021"
+description = "WASM host library for neural inference - Embed AI in any Rust app"
+license = "MIT"
+repository = "https://github.com/yourusername/ferrite"
+keywords = ["wasm", "inference", "neural", "llm", "component-model"]
+categories = ["wasm", "science"]
+
+[lib]
+name = "ferrite_wasm_host"
+path = "src/lib.rs"
+
+[dependencies]
+# Core ferrite engine
+ferrite-core = { path = "../ferrite-core" }
+
+# Candle for real inference
+candle-core = "0.8"
+candle-transformers = "0.8"
+
+# Model downloading
+hf-hub = "0.4"
+dirs = "5.0"
+
+# WASM runtime with component model
+wasmtime = { version = "27", features = ["component-model", "cranelift"] }
+wasmtime-wasi = "27"
+
+# WIT bindings
+wit-bindgen = "0.37"
+
+# Utilities
+anyhow = "1.0"
+tracing = "0.1"
+
+[features]
+cuda = ["ferrite-core/cuda"]
+default = []
