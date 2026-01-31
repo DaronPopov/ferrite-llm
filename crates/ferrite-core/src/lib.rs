@@ -27,6 +27,7 @@ pub mod sampling;
 pub mod chat_session;
 pub mod flash_attention;
 pub mod cuda_kernel;
+pub mod registry;
 
 // Re-exports for convenience
 pub use tokenizer::{Tokenizer, ChatMessage, ChatRole, Encoding, TokenizerError};
@@ -39,3 +40,9 @@ pub use flash_attention::{flash_attention, FlashAttentionConfig};
 
 #[cfg(feature = "cuda")]
 pub use cuda_kernel::{CudaKernel, CudaKernelConfig};
+
+// Registry re-exports
+pub use registry::{
+    Catalog, ChatTemplate, DownloadedModel, ModelFamily as RegistryModelFamily,
+    ModelInfo, ModelLoader, ModelSource, ModelSpec, TokenizerSource, WeightFormat,
+};

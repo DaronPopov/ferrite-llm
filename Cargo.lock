@@ -1182,10 +1182,12 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "cudarc",
+ "hf-hub",
  "llm-tokenizer",
  "serde",
  "serde_json",
  "tokio-test",
+ "tracing",
 ]
 
 [[package]]

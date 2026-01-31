@@ -12,8 +12,8 @@ default = []
 flash-attn = ["candle-transformers/flash-attn"]
 
 [dependencies]
-# Ferrite v2 - Candle companion library
-ferrite = { path = ".." }
+# Ferrite core - Pure inference library
+ferrite = { package = "ferrite-core", path = "../../crates/ferrite-core" }
 
 # Candle - Pure Rust ML (with CUDA support)
 candle-core = { version = "0.8", features = ["cuda"] }

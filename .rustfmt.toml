@@ -1,0 +1,40 @@
+# Ferrite Rust Formatting Configuration
+
+# Maximum width of each line
+max_width = 100
+
+# How to use multi-line items
+use_small_heuristics = "Max"
+
+# Merge imports from the same crate into a single use statement
+imports_granularity = "Crate"
+
+# Reorder imports alphabetically
+reorder_imports = true
+
+# Reorder modules declarations alphabetically
+reorder_modules = true
+
+# Put single-expression functions on one line
+fn_single_line = false
+
+# Format string literals where necessary
+format_strings = true
+
+# Format code in doccomments
+format_code_in_doc_comments = true
+
+# Normalize comments
+normalize_comments = true
+
+# Wrap comments at max_width
+wrap_comments = true
+
+# Use field initialization shorthand if possible
+use_field_init_shorthand = true
+
+# Use try shorthand
+use_try_shorthand = true
+
+# Control the layout of chains
+chain_width = 60

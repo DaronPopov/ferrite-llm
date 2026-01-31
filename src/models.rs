@@ -161,4 +161,25 @@ impl ModelConfig {
                     || m.name.to_lowercase().contains(&query_lower)
             })
     }
+
+    /// Estimate VRAM requirements in GB based on parameter count and quantization
+    pub fn estimated_vram_gb(&self, quantized: bool) -> f32 {
+        // Parse parameter count from string (e.g., "7B", "1.1B", "0.5B", "2.7B")
+        let params_str = self.parameters.to_lowercase();
+        let params_str = params_str.trim_end_matches(" (4-bit)");
+
+        let billions: f32 = if let Some(b) = params_str.strip_suffix('b') {
+            b.parse().unwrap_or(1.0)
+        } else {
+            1.0
+        };
+
+        if quantized {
+            // 4-bit quantized: ~0.5-0.6 GB per billion parameters + overhead
+            (billions * 0.55) + 0.5
+        } else {
+            // FP16: ~2 GB per billion parameters + overhead
+            (billions * 2.0) + 0.5
+        }
+    }
 }

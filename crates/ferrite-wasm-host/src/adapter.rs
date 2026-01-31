@@ -1,12 +1,15 @@
 //! Type Adapter Layer - Bridge between WIT types and Ferrite engine
 //!
 //! This is the TRAIT SIGNATURE ENGINE that connects WASM to native Ferrite inference.
+//! Now uses the model registry for dynamic model loading.
 
 use candle_core::{quantized::gguf_file, Device, Tensor};
 use crate::bindings::WitGenConfig;
+use ferrite_core::registry::{
+    Catalog, ChatTemplate, DownloadedModel, ModelFamily, ModelLoader, ModelSpec,
+};
 use std::path::PathBuf;
 use std::sync::Arc;
-
 
 /// Convert WIT GenerationConfig to ferrite's GenerationConfig
 pub fn wit_to_ferrite_config(wit_config: &WitGenConfig) -> ferrite_core::GenerationConfig {
@@ -22,13 +25,17 @@ pub fn wit_to_ferrite_config(wit_config: &WitGenConfig) -> ferrite_core::Generat
     }
 }
 
-/// Quantized model wrapper
-struct QuantizedMistral {
+// ═══════════════════════════════════════════════════════════════════════════════
+// QUANTIZED MODEL IMPLEMENTATIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Generic quantized Llama-family model (Llama, Mistral, Qwen, Yi, etc.)
+struct QuantizedLlama {
     model: candle_transformers::models::quantized_llama::ModelWeights,
     device: Device,
 }
 
-impl QuantizedMistral {
+impl QuantizedLlama {
     fn new(gguf_path: &PathBuf, device: Device) -> Result<Self, Box<dyn std::error::Error>> {
         let mut file = std::fs::File::open(gguf_path)?;
         let gguf_content = gguf_file::Content::read(&mut file)?;
@@ -42,7 +49,7 @@ impl QuantizedMistral {
     }
 }
 
-impl ferrite_core::InferenceModel for QuantizedMistral {
+impl ferrite_core::InferenceModel for QuantizedLlama {
     fn forward(&mut self, tokens: &[u32], pos: usize) -> Result<Tensor, Box<dyn std::error::Error>> {
         if tokens.is_empty() {
             return Ok(Tensor::zeros((1, 32000), candle_core::DType::F32, &self.device)?);
@@ -77,58 +84,197 @@ impl ferrite_core::InferenceModel for QuantizedMistral {
     }
 }
 
-/// Model adapter - bridges WIT interface to ferrite engine
+/// Quantized Phi model
+struct QuantizedPhi {
+    model: candle_transformers::models::quantized_llama::ModelWeights,
+    device: Device,
+}
+
+impl QuantizedPhi {
+    fn new(gguf_path: &PathBuf, device: Device) -> Result<Self, Box<dyn std::error::Error>> {
+        // Phi models use the same GGUF format as Llama
+        let mut file = std::fs::File::open(gguf_path)?;
+        let gguf_content = gguf_file::Content::read(&mut file)?;
+        let model = candle_transformers::models::quantized_llama::ModelWeights::from_gguf(
+            gguf_content,
+            &mut file,
+            &device,
+        )?;
+
+        Ok(Self { model, device })
+    }
+}
+
+impl ferrite_core::InferenceModel for QuantizedPhi {
+    fn forward(&mut self, tokens: &[u32], pos: usize) -> Result<Tensor, Box<dyn std::error::Error>> {
+        if tokens.is_empty() {
+            return Ok(Tensor::zeros((1, 51200), candle_core::DType::F32, &self.device)?);
+        }
+        let input = Tensor::new(tokens, &self.device)?.unsqueeze(0)?;
+        let logits = self.model.forward(&input, pos)?;
+        Ok(logits.squeeze(0)?)
+    }
+
+    fn prefill(&mut self, tokens: &[u32]) -> Result<Tensor, Box<dyn std::error::Error>> {
+        let mut pos = 0;
+        for &token in tokens.iter().take(tokens.len().saturating_sub(1)) {
+            let input = Tensor::new(&[token], &self.device)?.unsqueeze(0)?;
+            let _ = self.model.forward(&input, pos)?;
+            pos += 1;
+        }
+        if let Some(&last) = tokens.last() {
+            let input = Tensor::new(&[last], &self.device)?.unsqueeze(0)?;
+            let logits = self.model.forward(&input, pos)?;
+            Ok(logits.squeeze(0)?)
+        } else {
+            Ok(Tensor::zeros((1, 51200), candle_core::DType::F32, &self.device)?)
+        }
+    }
+
+    fn clear_cache(&mut self) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// DYNAMIC MODEL WRAPPER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Enum to hold different model types
+enum DynamicModel {
+    Llama(QuantizedLlama),
+    Phi(QuantizedPhi),
+    // Add more as needed: Gemma, Mamba, etc.
+}
+
+impl ferrite_core::InferenceModel for DynamicModel {
+    fn forward(&mut self, tokens: &[u32], pos: usize) -> Result<Tensor, Box<dyn std::error::Error>> {
+        match self {
+            Self::Llama(m) => m.forward(tokens, pos),
+            Self::Phi(m) => m.forward(tokens, pos),
+        }
+    }
+
+    fn prefill(&mut self, tokens: &[u32]) -> Result<Tensor, Box<dyn std::error::Error>> {
+        match self {
+            Self::Llama(m) => m.prefill(tokens),
+            Self::Phi(m) => m.prefill(tokens),
+        }
+    }
+
+    fn clear_cache(&mut self) {
+        match self {
+            Self::Llama(m) => m.clear_cache(),
+            Self::Phi(m) => m.clear_cache(),
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODEL ADAPTER (uses registry)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Model adapter - bridges WIT interface to ferrite engine via registry
 pub struct ModelAdapter {
     pub name: String,
-    session: ferrite_core::ChatSession<QuantizedMistral>,
+    pub spec: ModelSpec,
+    session: ferrite_core::ChatSession<DynamicModel>,
 }
 
 impl ModelAdapter {
+    /// Create a new model adapter using the registry
     pub fn new(model_name: String, auth_token: Option<String>) -> Result<Self, String> {
         tracing::info!("🔄 Initializing model: {}", model_name);
 
-        // Map model name
-        let (model_id, filename) = match model_name.as_str() {
-            "mistral-7b-q4" | "mistral-7b" | "mistral" => (
-                "TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
-                "mistral-7b-instruct-v0.2.Q4_K_M.gguf",
-            ),
-            _ => return Err(format!("Unknown model: {}. Try 'mistral-7b-q4'", model_name)),
-        };
+        // Create model loader with auth
+        let loader = ModelLoader::new("./models")
+            .with_auth(auth_token.clone());
 
-        tracing::info!("📦 Model ID: {}", model_id);
+        // Look up model in catalog
+        let spec = loader.get_spec(&model_name)
+            .ok_or_else(|| {
+                let available = loader.catalog().list()
+                    .iter()
+                    .take(5)
+                    .map(|s| s.name.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                format!(
+                    "Unknown model: '{}'. Available: {} (and {} more). Use 'list-models' to see all.",
+                    model_name,
+                    available,
+                    loader.catalog().len().saturating_sub(5)
+                )
+            })?
+            .clone();
 
-        // Get device
+        tracing::info!("📦 Found model: {} ({:?})", spec.name, spec.family);
+        tracing::info!("📝 Description: {}", spec.description);
+
+        // Download model
+        let downloaded = loader.download_spec(&spec)
+            .map_err(|e| format!("Download failed: {}", e))?;
+
+        // Load model based on family
+        Self::load_from_downloaded(downloaded, auth_token)
+    }
+
+    /// Load a GGUF file directly with auto-detection
+    pub fn from_gguf(path: &std::path::Path, auth_token: Option<String>) -> Result<Self, String> {
+        tracing::info!("🔄 Auto-loading GGUF: {}", path.display());
+
+        let loader = ModelLoader::new("./models")
+            .with_auth(auth_token.clone());
+
+        let downloaded = loader.load_gguf_auto(path)
+            .map_err(|e| format!("Auto-detection failed: {}", e))?;
+
+        tracing::info!("✅ Detected: {:?} model", downloaded.family());
+
+        Self::load_from_downloaded(downloaded, auth_token)
+    }
+
+    /// Load from a downloaded model
+    fn load_from_downloaded(downloaded: DownloadedModel, auth_token: Option<String>) -> Result<Self, String> {
         let device = Device::cuda_if_available(0)
             .map_err(|e| format!("Device error: {}", e))?;
 
         tracing::info!("🖥️  Device: {:?}", device);
 
-        // Download GGUF (blocking)
-        tracing::info!("⬇️  Downloading model...");
-        let gguf_path = Self::download_gguf_sync(model_id, filename, auth_token.clone())
-            .map_err(|e| format!("Download failed: {}", e))?;
+        // Load the model based on family
+        tracing::info!("🧠 Loading {:?} model...", downloaded.family());
 
-        tracing::info!("✓ Model file: {}", gguf_path.display());
+        let model: DynamicModel = match downloaded.family() {
+            ModelFamily::Llama => {
+                let m = QuantizedLlama::new(&downloaded.weights_path, device)
+                    .map_err(|e| format!("Model load failed: {}", e))?;
+                DynamicModel::Llama(m)
+            }
+            ModelFamily::Phi => {
+                let m = QuantizedPhi::new(&downloaded.weights_path, device)
+                    .map_err(|e| format!("Model load failed: {}", e))?;
+                DynamicModel::Phi(m)
+            }
+            ModelFamily::Gemma => {
+                // Gemma uses Llama-compatible GGUF loader
+                let m = QuantizedLlama::new(&downloaded.weights_path, device)
+                    .map_err(|e| format!("Model load failed: {}", e))?;
+                DynamicModel::Llama(m)
+            }
+            _ => {
+                return Err(format!("Architecture {:?} not yet implemented", downloaded.family()));
+            }
+        };
 
-        // Load tokenizer (blocking)
+        tracing::info!("✓ Model loaded!");
+
+        // Load tokenizer
         tracing::info!("🔤 Loading tokenizer...");
-        let tokenizer = Self::load_tokenizer_sync("mistralai/Mistral-7B-Instruct-v0.2", auth_token)
+        let tokenizer = Self::load_tokenizer(&downloaded, auth_token)
             .map_err(|e| format!("Tokenizer failed: {}", e))?;
 
         tracing::info!("✓ Tokenizer ready");
 
-        // Load model
-        tracing::info!("🧠 Loading quantized model...");
-        let model = QuantizedMistral::new(&gguf_path, device)
-            .map_err(|e| format!("Model load failed: {}", e))?;
-
-        tracing::info!("✓ Model loaded!");
-
-        // Create session with generation config that will be updated per request
-        let config = ferrite_core::ChatSessionConfig::mistral()
-            .with_context_length(32768)
-            .with_generation(ferrite_core::GenerationConfig::default());
+        // Create session config based on chat template
+        let config = Self::create_session_config(&downloaded.spec);
 
         let session = ferrite_core::ChatSession::new(
             model,
@@ -141,53 +287,63 @@ impl ModelAdapter {
         tracing::info!("✅ Ready for inference!");
 
         Ok(Self {
-            name: model_name,
+            name: downloaded.spec.name.clone(),
+            spec: downloaded.spec,
             session,
         })
     }
 
-    fn download_gguf_sync(model_id: &str, filename: &str, token: Option<String>) -> Result<PathBuf, Box<dyn std::error::Error>> {
-        if let Some(ref t) = token {
-            tracing::info!("🔑 Using provided authentication token (length: {})", t.len());
-        } else {
-            tracing::info!("🔓 No authentication token provided");
-        }
+    /// Create session config from model spec
+    fn create_session_config(spec: &ModelSpec) -> ferrite_core::ChatSessionConfig {
+        let chat_format = match spec.chat_template {
+            ChatTemplate::Mistral => ferrite_core::ChatFormat::Mistral,
+            ChatTemplate::Llama2 | ChatTemplate::Llama3 => ferrite_core::ChatFormat::Llama,
+            ChatTemplate::ChatML | ChatTemplate::Phi3 => ferrite_core::ChatFormat::ChatML,
+            ChatTemplate::Gemma => ferrite_core::ChatFormat::Gemma,
+            _ => ferrite_core::ChatFormat::Mistral,
+        };
 
-        let mut api_builder = hf_hub::api::sync::ApiBuilder::new();
-        if let Some(t) = token {
-            api_builder = api_builder.with_token(Some(t));
-        }
-        
-        let api = api_builder.build()?;
-        let repo = api.model(model_id.to_string());
-
-        tracing::info!("📂 Checking hf-hub cache...");
-        let gguf_path = repo.get(filename)?;
-
-        tracing::info!("✓ Model located at: {}", gguf_path.display());
-        Ok(gguf_path)
+        ferrite_core::ChatSessionConfig::default()
+            .with_context_length(spec.context_length)
+            .with_chat_format(chat_format)
     }
 
-    fn load_tokenizer_sync(model_id: &str, token: Option<String>) -> Result<ferrite_core::Tokenizer, Box<dyn std::error::Error>> {
-        if let Some(ref t) = token {
-            tracing::info!("🔑 Using provided authentication token for tokenizer (length: {})", t.len());
-        } else {
-            tracing::info!("🔓 No authentication token provided for tokenizer");
+    /// Load tokenizer from downloaded model
+    fn load_tokenizer(
+        downloaded: &DownloadedModel,
+        auth_token: Option<String>,
+    ) -> Result<ferrite_core::Tokenizer, Box<dyn std::error::Error>> {
+        // Try to load from the tokenizer path first
+        if downloaded.tokenizer_path.join("tokenizer.json").exists() {
+            return Ok(ferrite_core::Tokenizer::from_dir(&downloaded.tokenizer_path)?);
         }
+
+        // Fall back to downloading from HuggingFace
+        let tokenizer_repo = match &downloaded.spec.tokenizer {
+            ferrite_core::registry::TokenizerSource::HuggingFace { repo } => repo.clone(),
+            ferrite_core::registry::TokenizerSource::SameAsModel => {
+                match &downloaded.spec.source {
+                    ferrite_core::registry::ModelSource::HuggingFace { repo, .. } => repo.clone(),
+                    _ => return Err("Cannot determine tokenizer repo".into()),
+                }
+            }
+            ferrite_core::registry::TokenizerSource::Local { path } => {
+                return Ok(ferrite_core::Tokenizer::from_dir(path)?);
+            }
+        };
+
+        tracing::info!("📥 Downloading tokenizer from {}", tokenizer_repo);
 
         let mut api_builder = hf_hub::api::sync::ApiBuilder::new();
-        if let Some(t) = token {
+        if let Some(t) = auth_token {
             api_builder = api_builder.with_token(Some(t));
         }
-        
         let api = api_builder.build()?;
-        let repo = api.model(model_id.to_string());
+        let repo = api.model(tokenizer_repo);
 
-        // Download tokenizer files
         let tokenizer_file = repo.get("tokenizer.json")?;
-        let _config_file = repo.get("tokenizer_config.json").ok();
+        let _ = repo.get("tokenizer_config.json").ok();
 
-        // Get the directory (should be the cache dir for this model)
         let model_dir = tokenizer_file.parent()
             .ok_or("No parent directory")?
             .to_path_buf();
@@ -195,11 +351,9 @@ impl ModelAdapter {
         Ok(ferrite_core::Tokenizer::from_dir(&model_dir)?)
     }
 
+    /// Generate text from a prompt
     pub fn generate(&mut self, prompt: &str, _config: &ferrite_core::GenerationConfig) -> Result<String, String> {
         tracing::debug!("🤖 Generating for: {}", prompt);
-
-        // Note: ChatSession uses the config from initialization
-        // In a more complete impl, we'd recreate the session or make config mutable
 
         match self.session.user_turn(prompt) {
             Ok(response) => Ok(response),
@@ -207,20 +361,31 @@ impl ModelAdapter {
         }
     }
 
-    pub fn generate_stream(&mut self, prompt: &str, _config: &ferrite_core::GenerationConfig)
+    /// Generate text as a stream of tokens
+    pub fn generate_stream(&mut self, prompt: &str, config: &ferrite_core::GenerationConfig)
         -> Result<Vec<String>, String>
     {
         // For prototype, call generate and split into words
-        let response = self.generate(prompt, _config)?;
+        let response = self.generate(prompt, config)?;
         let tokens: Vec<String> = response
             .split_whitespace()
             .map(|s| s.to_string() + " ")
             .collect();
         Ok(tokens)
     }
+
+    /// List all available models
+    pub fn list_available() -> Vec<ferrite_core::ModelInfo> {
+        ModelLoader::new("./models").list_models()
+    }
+
+    /// Search for models
+    pub fn search(query: &str) -> Vec<ferrite_core::ModelInfo> {
+        ModelLoader::new("./models").search(query)
+    }
 }
 
-/// Tokenizer adapter
+/// Tokenizer adapter (for direct tokenization without full model)
 pub struct TokenizerAdapter;
 
 impl TokenizerAdapter {

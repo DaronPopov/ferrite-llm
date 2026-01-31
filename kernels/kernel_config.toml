@@ -1,0 +1,60 @@
+# Ferrite Custom CUDA Kernel Configuration
+#
+# Add your custom kernels here and they'll be automatically compiled!
+
+[build]
+# Default GPU architecture (auto-detect if not specified)
+architecture = "auto"  # or "sm_86", "sm_89", etc.
+
+# Optimization level
+optimization = "O3"
+
+# Enable fast math (can reduce precision slightly for speed)
+fast_math = true
+
+# C++ standard
+cpp_standard = "c++17"
+
+# CUDA paths (auto-detect if not specified)
+# cuda_home = "/usr/local/cuda"
+
+[kernels.flash_attention]
+enabled = true
+description = "Memory-efficient attention (O(N) instead of O(N²))"
+file = "flash_attention.cu"
+exports = [
+    "flash_attention_forward",
+    "flash_attention_causal_forward"
+]
+
+# Example: Add your own kernel
+# [kernels.my_custom_kernel]
+# enabled = true
+# description = "My custom CUDA operation"
+# file = "my_custom_kernel.cu"
+# exports = ["my_kernel_forward"]
+
+# Architecture-specific optimizations
+[architectures]
+# RTX 30xx series
+sm_86 = { name = "Ampere", tile_size = 64 }
+
+# RTX 40xx series
+sm_89 = { name = "Ada Lovelace", tile_size = 128 }
+
+# A100
+sm_80 = { name = "A100", tile_size = 128 }
+
+# H100
+sm_90 = { name = "H100", tile_size = 256 }
+
+# Build profiles
+[profiles.release]
+optimization = "O3"
+fast_math = true
+debug_info = false
+
+[profiles.debug]
+optimization = "O0"
+fast_math = false
+debug_info = true

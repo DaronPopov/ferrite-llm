@@ -14,6 +14,7 @@ pub struct SamplerConfig {
     pub temperature: f64,
     pub top_p: f64,
     pub top_k: usize,
+    pub min_p: f32,
     pub repetition_penalty: f32,
     pub seed: u64,
 }
@@ -24,6 +25,7 @@ impl Default for SamplerConfig {
             temperature: 0.7,
             top_p: 0.9,
             top_k: 0,
+            min_p: 0.05,
             repetition_penalty: 1.1,
             seed: 42,
         }
@@ -49,6 +51,7 @@ impl Sampler {
             temperature: 0.0,
             top_p: 1.0,
             top_k: 0,
+            min_p: 0.0,
             repetition_penalty: 1.0,
             seed: 0,
         })
@@ -77,11 +80,18 @@ impl Sampler {
         let probs = candle_nn::ops::softmax(&scaled, D::Minus1)?;
         let probs_vec: Vec<f32> = probs.to_vec1()?;
 
-        // Apply top-p filtering
-        let filtered = if self.config.top_p < 1.0 {
-            self.top_p_filter(&probs_vec)
+        // Apply min-p filtering (quality gate based on top token)
+        let filtered = if self.config.min_p > 0.0 {
+            self.min_p_filter(&probs_vec)
         } else {
             probs_vec
+        };
+
+        // Apply top-p filtering
+        let filtered = if self.config.top_p < 1.0 {
+            self.top_p_filter(&filtered)
+        } else {
+            filtered
         };
 
         // Apply top-k filtering
@@ -154,6 +164,26 @@ impl Sampler {
         for (idx, prob) in indexed.into_iter().take(self.config.top_k) {
             filtered[idx] = prob;
         }
+
+        // Renormalize
+        let sum: f32 = filtered.iter().sum();
+        if sum > 0.0 {
+            filtered.iter_mut().for_each(|p| *p /= sum);
+        }
+
+        filtered
+    }
+
+    /// Min-P filtering: keep tokens with prob >= min_p * max_prob
+    /// This is more surgical than top-p, scaling threshold based on confidence
+    fn min_p_filter(&self, probs: &[f32]) -> Vec<f32> {
+        let max_prob = probs.iter().cloned().fold(0.0f32, f32::max);
+        let threshold = self.config.min_p * max_prob;
+
+        let mut filtered: Vec<f32> = probs
+            .iter()
+            .map(|&p| if p >= threshold { p } else { 0.0 })
+            .collect();
 
         // Renormalize
         let sum: f32 = filtered.iter().sum();

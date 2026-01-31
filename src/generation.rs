@@ -15,6 +15,8 @@ pub struct GenerationConfig {
     pub top_p: f64,
     /// Top-k sampling (0 = disabled)
     pub top_k: usize,
+    /// Min-p sampling threshold (0.0 = disabled, typical 0.05-0.1)
+    pub min_p: f32,
     /// Repetition penalty (1.0 = no penalty)
     pub repetition_penalty: f32,
     /// Stop sequences (in addition to EOS)
@@ -30,6 +32,7 @@ impl Default for GenerationConfig {
             temperature: 0.7,
             top_p: 0.9,
             top_k: 0,
+            min_p: 0.05,
             repetition_penalty: 1.0,
             stop_sequences: vec![],
             seed: 42,
@@ -187,6 +190,8 @@ pub trait InferenceModel {
     fn forward(&mut self, tokens: &[u32], pos: usize) -> Result<candle_core::Tensor, Box<dyn std::error::Error>>;
     /// Prefill the model with multiple tokens (prompt processing)
     fn prefill(&mut self, tokens: &[u32]) -> Result<candle_core::Tensor, Box<dyn std::error::Error>>;
+    /// Clear the KV cache (for sliding window). Default is no-op for models without explicit cache.
+    fn clear_cache(&mut self) {}
 }
 
 /// A high-level streaming inference engine
@@ -201,6 +206,8 @@ pub struct StreamingInference<'a, M: InferenceModel> {
     eos_token: u32,
     all_tokens: Vec<u32>,
     finished: bool,
+    /// Maximum context length (enables sliding window when set)
+    context_length: Option<usize>,
 }
 
 impl<'a, M: InferenceModel> StreamingInference<'a, M> {
@@ -226,6 +233,7 @@ impl<'a, M: InferenceModel> StreamingInference<'a, M> {
             temperature: config.temperature,
             top_p: config.top_p,
             top_k: config.top_k,
+            min_p: config.min_p,
             repetition_penalty: config.repetition_penalty,
             seed: config.seed,
         });
@@ -247,7 +255,34 @@ impl<'a, M: InferenceModel> StreamingInference<'a, M> {
             eos_token,
             all_tokens: tokens,
             finished: false,
+            context_length: None,
         })
+    }
+
+    /// Set context length to enable sliding window KV-cache
+    /// When tokens exceed this limit, oldest 20% are dropped and cache is rebuilt
+    pub fn with_context_length(mut self, context_length: usize) -> Self {
+        self.context_length = Some(context_length);
+        self
+    }
+
+    /// Perform sliding window: drop oldest 20% of tokens and rebuild cache
+    fn slide_window(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let keep_ratio = 0.8;
+        let keep_count = (self.all_tokens.len() as f32 * keep_ratio) as usize;
+        let drop_count = self.all_tokens.len() - keep_count;
+
+        // Keep only the most recent tokens
+        self.all_tokens = self.all_tokens.split_off(drop_count);
+
+        // Clear and rebuild cache
+        self.model.clear_cache();
+        let _ = self.model.prefill(&self.all_tokens)?;
+
+        // Reset position to end of kept tokens
+        self.pos = self.all_tokens.len();
+
+        Ok(())
     }
 
     /// Generate the next token and return its text
@@ -269,6 +304,13 @@ impl<'a, M: InferenceModel> StreamingInference<'a, M> {
         // Add token to history
         self.all_tokens.push(current_token);
         self.stats.record_token();
+
+        // Sliding window: if approaching context limit, drop oldest tokens
+        if let Some(max_ctx) = self.context_length {
+            if self.pos >= max_ctx.saturating_sub(1) {
+                self.slide_window()?;
+            }
+        }
 
         // Get text for current token
         let text = self.decoder.step(current_token)?;
@@ -308,6 +350,8 @@ pub struct SpeculativeInference<'a, T: InferenceModel, D: InferenceModel> {
     all_tokens: Vec<u32>,
     finished: bool,
     draft_k: usize,
+    /// Maximum context length (enables sliding window when set)
+    context_length: Option<usize>,
 }
 
 impl<'a, T: InferenceModel, D: InferenceModel> SpeculativeInference<'a, T, D> {
@@ -337,6 +381,7 @@ impl<'a, T: InferenceModel, D: InferenceModel> SpeculativeInference<'a, T, D> {
             temperature: config.temperature,
             top_p: config.top_p,
             top_k: config.top_k,
+            min_p: config.min_p,
             repetition_penalty: config.repetition_penalty,
             seed: config.seed,
         });
@@ -360,7 +405,32 @@ impl<'a, T: InferenceModel, D: InferenceModel> SpeculativeInference<'a, T, D> {
             all_tokens: tokens,
             finished: false,
             draft_k,
+            context_length: None,
         })
+    }
+
+    /// Set context length to enable sliding window KV-cache
+    pub fn with_context_length(mut self, context_length: usize) -> Self {
+        self.context_length = Some(context_length);
+        self
+    }
+
+    /// Perform sliding window: drop oldest 20% of tokens and rebuild cache
+    fn slide_window(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let keep_ratio = 0.8;
+        let keep_count = (self.all_tokens.len() as f32 * keep_ratio) as usize;
+        let drop_count = self.all_tokens.len() - keep_count;
+
+        self.all_tokens = self.all_tokens.split_off(drop_count);
+
+        // Clear and rebuild both caches
+        self.target.clear_cache();
+        self.draft.clear_cache();
+        let _ = self.target.prefill(&self.all_tokens)?;
+        let _ = self.draft.prefill(&self.all_tokens)?;
+
+        self.pos = self.all_tokens.len();
+        Ok(())
     }
 
     /// Generate the next batch of tokens and return their text
@@ -378,6 +448,13 @@ impl<'a, T: InferenceModel, D: InferenceModel> SpeculativeInference<'a, T, D> {
         if first_token == self.eos_token || self.stats.generated_tokens >= self.config.max_tokens {
             self.finished = true;
             return Ok(self.decoder.flush()?);
+        }
+
+        // Sliding window check before drafting
+        if let Some(max_ctx) = self.context_length {
+            if self.pos + self.draft_k >= max_ctx.saturating_sub(1) {
+                self.slide_window()?;
+            }
         }
 
         // 1. Draft K new tokens

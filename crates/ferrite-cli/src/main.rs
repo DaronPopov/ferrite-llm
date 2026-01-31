@@ -222,20 +222,33 @@ fn run_module(module: &PathBuf, model_cache: &PathBuf, metrics: bool) -> Result<
     result
 }
 
-fn list_models(model_cache: &PathBuf, detailed: bool) -> Result<()> {
-    info!("📚 Models in cache: {}", model_cache.display());
+fn list_models(_model_cache: &PathBuf, detailed: bool) -> Result<()> {
+    // Show available models from registry
+    let catalog = ferrite_wasm_host::ferrite_core::Catalog::new();
 
-    if !model_cache.exists() {
-        println!("Cache directory does not exist: {}", model_cache.display());
-        println!("No models downloaded yet.");
-        return Ok(());
+    println!("📚 Available Models ({} in registry):\n", catalog.len());
+
+    for spec in catalog.list() {
+        if detailed {
+            println!("  {} [{}]", spec.name, spec.size);
+            println!("    Family: {:?}", spec.family);
+            println!("    Format: {:?}", spec.format);
+            println!("    Context: {} tokens", spec.context_length);
+            println!("    Auth required: {}", if spec.requires_auth { "yes" } else { "no" });
+            println!("    {}\n", spec.description);
+        } else {
+            let auth_marker = if spec.requires_auth { " 🔑" } else { "" };
+            println!("  {:30} {:6}  {}{}", spec.name, spec.size, spec.description, auth_marker);
+        }
     }
 
-    // Check HuggingFace cache
+    println!();
+
+    // Check HuggingFace cache for downloaded models
     if let Some(home) = dirs::home_dir() {
         let hf_cache = home.join(".cache/huggingface/hub");
         if hf_cache.exists() {
-            println!("\n🤗 HuggingFace Hub Cache: {}", hf_cache.display());
+            println!("📥 Downloaded Models (in HF cache):\n");
 
             let entries = std::fs::read_dir(&hf_cache)?;
             let mut count = 0;
@@ -341,10 +354,14 @@ fn show_info() -> Result<()> {
     }
 
     println!();
-    println!("📚 Model Support:");
-    println!("   • Mistral 7B (Q4 quantized)");
-    println!("   • Qwen2 0.5B");
-    println!("   • Custom GGUF models");
+
+    // Show model registry info
+    let catalog = ferrite_wasm_host::ferrite_core::Catalog::new();
+    println!("📚 Model Registry: {} models available", catalog.len());
+    println!("   Families: Llama, Mistral, Qwen, Phi, Gemma, CodeLlama");
+    println!("   Formats: GGUF (quantized), SafeTensors");
+    println!("   Run 'ferrite-rt models' to list all");
+
     println!();
     println!("🌐 Interfaces:");
     println!("   • WIT (WebAssembly Interface Types)");
