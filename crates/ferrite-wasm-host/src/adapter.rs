@@ -2,15 +2,13 @@
 //!
 //! This is the TRAIT SIGNATURE ENGINE that connects WASM to native Ferrite inference.
 //! Now uses the model registry for dynamic model loading.
-
 use candle_core::{quantized::gguf_file, Device, Tensor};
 use crate::bindings::WitGenConfig;
 use ferrite_core::registry::{
-    Catalog, ChatTemplate, DownloadedModel, ModelFamily, ModelLoader, ModelSpec,
+    ChatTemplate, DownloadedModel, ModelFamily, ModelLoader, ModelSpec,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
-
 /// Convert WIT GenerationConfig to ferrite's GenerationConfig
 pub fn wit_to_ferrite_config(wit_config: &WitGenConfig) -> ferrite_core::GenerationConfig {
     ferrite_core::GenerationConfig {
