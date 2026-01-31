@@ -170,17 +170,6 @@ let session = ChatSession::new(model, tokenizer, None, config)?;
 let response = session.user_turn("Hello!")?;
 ```
 
-## ✨ Features
-
-- **🔒 Sandboxed Execution** - WASM Component Model isolation
-- **🚀 High Performance** - Quantized models (GGUF), CUDA support
-- **📦 Modular Design** - Use only what you need
-- **🔌 Pluggable Models** - Mistral 7B, Qwen, custom GGUF
-- **🎨 Multiple Chat Formats** - Mistral, Llama, ChatML, Gemma
-- **💾 Smart Caching** - HuggingFace Hub integration
-- **📊 Performance Metrics** - Built-in timing and statistics
-- **🔑 Auth Support** - HuggingFace token integration
-- **⚡ Zero Warnings** - Production-ready code quality
 
 ## 🛠️ Development
 
