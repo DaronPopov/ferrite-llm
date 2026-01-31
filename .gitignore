@@ -1,9 +1,22 @@
 # Build artifacts
 /target/
 /examples/target/
+*.wasm
+!adapters/*.wasm
 
-# Cargo lock for library (keep for workspace)
-# Cargo.lock
+# Old dev folders (not part of production)
+/src/
+/kernels/
+/tests/
+/ferrite-guest/
+/ferrite-runtime/
+/examples/native/
+
+# Dev notes
+PHASE*.md
+QUICKSTART.md
+NEXT_STEPS*.txt
+REFACTORING.md
 
 # IDE
 .idea/
