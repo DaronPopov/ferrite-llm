@@ -37,7 +37,10 @@ ferrite/
 ### Install the Runtime
 
 ```bash
-cargo install --path crates/ferrite-cli
+  git clone https://github.com/DaronPopov/ferrite.git                            
+  cd ferrite                                                                     
+  cargo install --path crates/ferrite-cli                                        
+                                           
 ```
 
 ### Run an AI Module
