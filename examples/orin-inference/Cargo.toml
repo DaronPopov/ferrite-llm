@@ -1,0 +1,26 @@
+[package]
+name = "orin-inference"
+version = "0.1.0"
+edition = "2021"
+description = "Direct LLM inference on Jetson Orin (no WASM) with TLSF memory pool"
+
+[[bin]]
+name = "orin-infer"
+path = "src/main.rs"
+
+[dependencies]
+ferrite-core = { path = "../../crates/ferrite-core", features = ["cuda"] }
+candle-core = { version = "0.8", features = ["cuda"] }
+candle-transformers = "0.8"
+hf-hub = "0.4"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# ferriterc TLSF memory pool for Orin unified memory
+ptx-runtime = { path = "../../../ferrite-os/crates/public/ptx-runtime" }
+ptx-sys = { path = "../../../ferrite-os/crates/internal/ptx-sys" }
+
+# Enable ptx-alloc so candle's CUDA allocations go through TLSF managed pool.
+# This enables Orin unified memory oversubscription for 7B+ models with NVMe swap.
+cudarc = { version = "0.13", features = ["ptx-alloc"] }

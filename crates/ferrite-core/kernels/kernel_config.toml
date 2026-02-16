@@ -39,6 +39,9 @@ exports = [
 # RTX 30xx series
 sm_86 = { name = "Ampere", tile_size = 64 }
 
+# Jetson Orin (sm_87 - Ampere iGPU, unified memory, 2048 CUDA cores)
+sm_87 = { name = "Jetson Orin", tile_size = 64 }
+
 # RTX 40xx series
 sm_89 = { name = "Ada Lovelace", tile_size = 128 }
 

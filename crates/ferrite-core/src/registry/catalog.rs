@@ -270,7 +270,7 @@ impl Catalog {
         });
 
         // ═══════════════════════════════════════════════════════════════
-        // TINY/FAST MODELS (for testing)
+        // EMBEDDED/ORIN-FRIENDLY MODELS (fit in 4GB TLSF pool)
         // ═══════════════════════════════════════════════════════════════
 
         self.register(ModelSpec {
@@ -289,6 +289,63 @@ impl Catalog {
             },
             description: "TinyLlama 1.1B Chat (4-bit quantized)".into(),
             size: "1.1B".into(),
+            requires_auth: false,
+        });
+
+        self.register(ModelSpec {
+            name: "openllama-3b-q4".into(),
+            family: ModelFamily::Llama,
+            source: ModelSource::HuggingFace {
+                repo: "TheBloke/open_llama_3b_v2-GGUF".into(),
+                file: Some("open_llama_3b_v2.Q4_K_M.gguf".into()),
+                revision: None,
+            },
+            format: WeightFormat::GGUF,
+            chat_template: ChatTemplate::Raw,
+            context_length: 2048,
+            tokenizer: TokenizerSource::HuggingFace {
+                repo: "openlm-research/open_llama_3b_v2".into(),
+            },
+            description: "OpenLlama 3B v2 (4-bit quantized, Orin-friendly)".into(),
+            size: "3B".into(),
+            requires_auth: false,
+        });
+
+        self.register(ModelSpec {
+            name: "stablelm-zephyr-3b-q4".into(),
+            family: ModelFamily::Llama,
+            source: ModelSource::HuggingFace {
+                repo: "TheBloke/stablelm-zephyr-3b-GGUF".into(),
+                file: Some("stablelm-zephyr-3b.Q4_K_M.gguf".into()),
+                revision: None,
+            },
+            format: WeightFormat::GGUF,
+            chat_template: ChatTemplate::Zephyr,
+            context_length: 4096,
+            tokenizer: TokenizerSource::HuggingFace {
+                repo: "stabilityai/stablelm-zephyr-3b".into(),
+            },
+            description: "StableLM Zephyr 3B (4-bit quantized, Orin-friendly)".into(),
+            size: "3B".into(),
+            requires_auth: false,
+        });
+
+        self.register(ModelSpec {
+            name: "rocket-3b-q4".into(),
+            family: ModelFamily::Llama,
+            source: ModelSource::HuggingFace {
+                repo: "TheBloke/rocket-3B-GGUF".into(),
+                file: Some("rocket-3b.Q4_K_M.gguf".into()),
+                revision: None,
+            },
+            format: WeightFormat::GGUF,
+            chat_template: ChatTemplate::Zephyr,
+            context_length: 4096,
+            tokenizer: TokenizerSource::HuggingFace {
+                repo: "pansophic/rocket-3B".into(),
+            },
+            description: "Rocket 3B (4-bit quantized, Orin-friendly)".into(),
+            size: "3B".into(),
             requires_auth: false,
         });
 

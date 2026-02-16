@@ -6,6 +6,7 @@ members = [
     "crates/ferrite-cli",
     "examples/wasm/hello-inference",
     "examples/wasm/mistral-inference",
+    "examples/orin-inference",
 ]
 resolver = "2"
 
@@ -23,6 +24,10 @@ candle-transformers = "0.8"
 anyhow = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 tracing = "0.1"
+
+# Patch crates-io deps to use ferriterc PTX forks (TLSF O(1) allocator)
+[patch.crates-io]
+cudarc = { path = "../external/cudarc-ptx" }
 
 [profile.release]
 opt-level = 3

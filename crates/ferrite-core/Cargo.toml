@@ -18,7 +18,7 @@ candle-core = "0.8"
 candle-nn = "0.8"
 candle-transformers = "0.8"
 
-# CUDA support for custom kernels
+# CUDA support for custom kernels (patched to ferriterc cudarc-ptx with TLSF allocator)
 cudarc = { version = "0.13", features = ["f16"], optional = true }
 
 # Tokenization
