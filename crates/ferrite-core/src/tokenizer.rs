@@ -195,6 +195,11 @@ impl Tokenizer {
 
     pub fn vocab_size(&self) -> usize { self.vocab_size }
 
+    /// Look up the token ID for a given string token
+    pub fn token_to_id(&self, token: &str) -> Option<u32> {
+        self.inner.token_to_id(token)
+    }
+
     pub fn eos_token_id(&self) -> Option<u32> {
         self.inner.get_special_tokens().eos_token.as_ref()
             .and_then(|t| self.inner.token_to_id(t))

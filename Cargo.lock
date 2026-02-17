@@ -777,8 +777,19 @@ dependencies = [
 name = "cudarc"
 version = "0.13.9"
 dependencies = [
+ "cutlass-ptx",
  "half",
  "libloading",
+ "ptx-runtime",
+ "ptx-sys",
+]
+
+[[package]]
+name = "cutlass-ptx"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libc",
  "ptx-runtime",
  "ptx-sys",
 ]

@@ -162,8 +162,10 @@ pub struct ChatSession<M: InferenceModel> {
     messages: Vec<CachedMessage>,
     /// Token sampler
     sampler: Sampler,
-    /// End-of-sequence token
-    eos_token: u32,
+    /// Stop tokens (EOS + format-specific like <|im_end|>)
+    stop_tokens: Vec<u32>,
+    /// Stop strings checked against decoded text (fallback when tokenizer lacks special tokens)
+    stop_strings: Vec<String>,
     /// System prompt (if any)
     system_prompt: Option<String>,
     /// Whether system prompt has been encoded
@@ -184,7 +186,24 @@ impl<M: InferenceModel> ChatSession<M> {
         system_prompt: Option<&str>,
         config: ChatSessionConfig,
     ) -> Result<Self, ChatSessionError> {
-        let eos_token = tokenizer.eos_token_id().unwrap_or(2);
+        let mut stop_tokens = Vec::new();
+        if let Some(eos) = tokenizer.eos_token_id() {
+            stop_tokens.push(eos);
+        } else {
+            stop_tokens.push(2); // fallback
+        }
+        // ChatML models must also stop on <|im_end|>
+        let mut stop_strings = Vec::new();
+        if matches!(config.chat_format, ChatFormat::ChatML) {
+            if let Some(id) = tokenizer.token_to_id("<|im_end|>") {
+                if !stop_tokens.contains(&id) {
+                    stop_tokens.push(id);
+                }
+            } else {
+                // Tokenizer doesn't have <|im_end|> — fall back to string matching
+                stop_strings.push("<|im_end|>".to_string());
+            }
+        }
 
         let sampler = Sampler::new(SamplerConfig {
             temperature: config.generation.temperature,
@@ -202,7 +221,8 @@ impl<M: InferenceModel> ChatSession<M> {
             cached_tokens: Vec::new(),
             messages: Vec::new(),
             sampler,
-            eos_token,
+            stop_tokens,
+            stop_strings,
             system_prompt: system_prompt.map(|s| s.to_string()),
             system_encoded: false,
         })
@@ -319,6 +339,7 @@ impl<M: InferenceModel> ChatSession<M> {
             assistant_start,
             generated_count: 0,
             finished: false,
+            decoded_buf: String::new(),
         })
     }
 
@@ -448,9 +469,14 @@ impl<M: InferenceModel> ChatSession<M> {
         // Setup decoder for response
         let mut response_tokens = vec![next_token];
         let mut decoder = self.tokenizer.decode_stream(&self.cached_tokens, true);
+        let mut decoded_text = String::new();
+        let has_stop_strings = !self.stop_strings.is_empty();
 
         // Output first token
         if let Ok(Some(text)) = decoder.step(next_token) {
+            if has_stop_strings {
+                decoded_text.push_str(&text);
+            }
             print!("{}", text);
             std::io::Write::flush(&mut std::io::stdout()).ok();
         }
@@ -459,8 +485,9 @@ impl<M: InferenceModel> ChatSession<M> {
         generated_tokens += 1;
 
         // Autoregressive generation loop
+        let mut hit_stop_string = false;
         for _ in 0..self.config.generation.max_tokens - 1 {
-            if next_token == self.eos_token {
+            if self.stop_tokens.contains(&next_token) {
                 break;
             }
 
@@ -475,7 +502,7 @@ impl<M: InferenceModel> ChatSession<M> {
                 .sample(&logits, &self.cached_tokens)
                 .map_err(|e| ChatSessionError::SamplingError(e.to_string()))?;
 
-            if next_token == self.eos_token {
+            if self.stop_tokens.contains(&next_token) {
                 break;
             }
 
@@ -484,14 +511,23 @@ impl<M: InferenceModel> ChatSession<M> {
             generated_tokens += 1;
 
             if let Ok(Some(text)) = decoder.step(next_token) {
+                if has_stop_strings {
+                    decoded_text.push_str(&text);
+                    if self.stop_strings.iter().any(|s| decoded_text.contains(s.as_str())) {
+                        hit_stop_string = true;
+                        break;
+                    }
+                }
                 print!("{}", text);
                 std::io::Write::flush(&mut std::io::stdout()).ok();
             }
         }
 
         // Flush remaining text
-        if let Ok(Some(text)) = decoder.flush() {
-            print!("{}", text);
+        if !hit_stop_string {
+            if let Ok(Some(text)) = decoder.flush() {
+                print!("{}", text);
+            }
         }
         println!();
 
@@ -507,10 +543,16 @@ impl<M: InferenceModel> ChatSession<M> {
             self.config.context_length
         );
 
-        // Decode response
-        self.tokenizer
+        // Decode response, stripping any stop strings from the end
+        let mut response = self.tokenizer
             .decode(&response_tokens, true)
-            .map_err(|e| ChatSessionError::TokenizerError(e.to_string()))
+            .map_err(|e| ChatSessionError::TokenizerError(e.to_string()))?;
+        for stop in &self.stop_strings {
+            if let Some(pos) = response.find(stop.as_str()) {
+                response.truncate(pos);
+            }
+        }
+        Ok(response)
     }
 
     /// Slide the context window when approaching limit
@@ -632,6 +674,7 @@ pub struct StreamingResponse<'a, M: InferenceModel> {
     assistant_start: usize,
     generated_count: usize,
     finished: bool,
+    decoded_buf: String,
 }
 
 impl<'a, M: InferenceModel> StreamingResponse<'a, M> {
@@ -647,7 +690,7 @@ impl<'a, M: InferenceModel> StreamingResponse<'a, M> {
         };
 
         // Check for EOS or max tokens
-        if current_token == self.session.eos_token
+        if self.session.stop_tokens.contains(&current_token)
             || self.generated_count >= self.session.config.generation.max_tokens
         {
             self.finished = true;
@@ -675,6 +718,23 @@ impl<'a, M: InferenceModel> StreamingResponse<'a, M> {
             .decoder
             .step(current_token)
             .map_err(|e| ChatSessionError::TokenizerError(e.to_string()))?;
+
+        // Check stop strings in accumulated decoded text
+        if !self.session.stop_strings.is_empty() {
+            if let Some(ref t) = text {
+                self.decoded_buf.push_str(t);
+            }
+            if self.session.stop_strings.iter().any(|s| self.decoded_buf.contains(s.as_str())) {
+                self.finished = true;
+                let assistant_end = self.session.cached_tokens.len();
+                self.session.messages.push(CachedMessage {
+                    role: MessageRole::Assistant,
+                    start_idx: self.assistant_start,
+                    end_idx: assistant_end,
+                });
+                return Ok(None);
+            }
+        }
 
         // Get next token
         let pos = self.session.cached_tokens.len() - 1;

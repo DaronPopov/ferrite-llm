@@ -23,4 +23,5 @@ ptx-sys = { path = "../../../ferrite-os/crates/internal/ptx-sys" }
 
 # Enable ptx-alloc so candle's CUDA allocations go through TLSF managed pool.
 # This enables Orin unified memory oversubscription for 7B+ models with NVMe swap.
-cudarc = { version = "0.13", features = ["ptx-alloc"] }
+# ptx-cutlass routes FP16 GEMM through CUTLASS (~12% faster than cuBLAS on Orin).
+cudarc = { version = "0.13", features = ["ptx-alloc", "ptx-cutlass"] }

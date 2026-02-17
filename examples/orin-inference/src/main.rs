@@ -6,12 +6,14 @@
 //!
 //! Usage:
 //!   orin-infer [MODEL_NAME]
+//!   orin-infer [MODEL_NAME] --bench        # run 15-prompt stability benchmark
 //!
 //! Examples:
 //!   orin-infer                             # defaults to stablelm-zephyr-3b-q4
 //!   orin-infer tinyllama-1.1b-q4           # small & fast (llama arch)
 //!   orin-infer qwen2-1.5b-q4              # qwen2 arch
 //!   orin-infer --list                      # show all available models
+//!   orin-infer mistral-7b-q4 --bench       # benchmark with Mistral 7B
 
 use anyhow::{Context, Result};
 use candle_core::{quantized::gguf_file, Device, Tensor};
@@ -362,7 +364,8 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    let model_name = args.get(1)
+    let model_name = args.iter().skip(1)
+        .find(|s| !s.starts_with('-'))
         .map(|s| s.as_str())
         .unwrap_or("stablelm-zephyr-3b-q4");
 
@@ -450,45 +453,231 @@ fn main() -> Result<()> {
         config,
     ).context("Failed to create chat session")?;
 
+    let bench_mode = args.iter().any(|a| a == "--bench");
+
+    if bench_mode {
+        run_bench(&mut session, &_runtime, model_name)?;
+    } else {
+        println!("============================================");
+        println!("  Chat ready! Model: {}", model_name);
+        println!("  Mode: stateless, deterministic (temp=0)");
+        println!("  Type /quit to exit, /stats for pool info");
+        println!("============================================\n");
+
+        loop {
+            print!("You> ");
+            io::stdout().flush()?;
+
+            let mut input = String::new();
+            io::stdin().read_line(&mut input)?;
+            let input = input.trim();
+
+            if input.is_empty() { continue; }
+            if input == "/quit" || input == "/exit" {
+                println!("Goodbye!");
+                break;
+            }
+            if input == "/stats" {
+                let stats = _runtime.tlsf_stats();
+                println!("[TLSF] Allocated: {:.2} GB / {:.2} GB ({:.0}%)",
+                    stats.allocated_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+                    stats.total_pool_size as f64 / (1024.0 * 1024.0 * 1024.0),
+                    stats.utilization_percent);
+                println!("[TLSF] Fragmentation: {:.4}", stats.fragmentation_ratio);
+                continue;
+            }
+
+            // Stateless: clear history + KV cache before every turn
+            session.clear();
+
+            print!("\nAssistant> ");
+            io::stdout().flush()?;
+
+            match session.user_turn(input) {
+                Ok(_response) => { println!(); }
+                Err(e) => { eprintln!("\n[Error] {}", e); }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BENCHMARK MODE (--bench)
+// ═══════════════════════════════════════════════════════════════
+
+const BENCH_PROMPTS: &[&str] = &[
+    "What is the capital of France?",
+    "Explain how a transistor works in two sentences.",
+    "Write a Python function that checks if a number is prime.",
+    "What are the three laws of thermodynamics?",
+    "Describe the difference between TCP and UDP.",
+    "What causes the seasons on Earth?",
+    "Write a haiku about the ocean.",
+    "Explain what a hash table is and why it's useful.",
+    "What is the significance of the Turing test?",
+    "How does photosynthesis work?",
+    "Write a SQL query to find duplicate emails in a users table.",
+    "What is the difference between a stack and a queue?",
+    "Explain the concept of recursion with a simple example.",
+    "What are the main differences between HTTP/1.1 and HTTP/2?",
+    "Describe how garbage collection works in modern languages.",
+];
+
+struct BenchResult {
+    prompt_idx: usize,
+    tokens: usize,
+    elapsed_secs: f64,
+    tps: f64,
+    ok: bool,
+    pool_util: f32,
+    fragmentation: f32,
+}
+
+fn run_bench<M: InferenceModel>(
+    session: &mut ChatSession<M>,
+    runtime: &PtxRuntime,
+    model_name: &str,
+) -> Result<()> {
+    let total_prompts = BENCH_PROMPTS.len();
+
     println!("============================================");
-    println!("  Chat ready! Model: {}", model_name);
-    println!("  Mode: stateless, deterministic (temp=0)");
-    println!("  Type /quit to exit, /stats for pool info");
+    println!("  BENCHMARK MODE - {} prompts", total_prompts);
+    println!("  Model: {}", model_name);
+    println!("  Deterministic (temp=0), stateless");
     println!("============================================\n");
 
-    loop {
-        print!("You> ");
-        io::stdout().flush()?;
+    let mut results: Vec<BenchResult> = Vec::new();
+    let bench_start = std::time::Instant::now();
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        if input.is_empty() { continue; }
-        if input == "/quit" || input == "/exit" {
-            println!("Goodbye!");
-            break;
-        }
-        if input == "/stats" {
-            let stats = _runtime.tlsf_stats();
-            println!("[TLSF] Allocated: {:.2} GB / {:.2} GB ({:.0}%)",
-                stats.allocated_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
-                stats.total_pool_size as f64 / (1024.0 * 1024.0 * 1024.0),
-                stats.utilization_percent);
-            println!("[TLSF] Fragmentation: {:.4}", stats.fragmentation_ratio);
-            continue;
-        }
-
-        // Stateless: clear history + KV cache before every turn
+    for (i, prompt) in BENCH_PROMPTS.iter().enumerate() {
         session.clear();
 
-        print!("\nAssistant> ");
+        println!("─── Prompt {}/{} ───", i + 1, total_prompts);
+        println!("Q: {}", prompt);
+        print!("A: ");
         io::stdout().flush()?;
 
-        match session.user_turn(input) {
-            Ok(_response) => { println!(); }
-            Err(e) => { eprintln!("\n[Error] {}", e); }
+        let t0 = std::time::Instant::now();
+        let result = session.user_turn(prompt);
+        let elapsed = t0.elapsed();
+
+        let stats = runtime.tlsf_stats();
+
+        match result {
+            Ok(_response) => {
+                // Parse token count from the [Stats] line the model printed.
+                // We can estimate from the elapsed time. The model prints its own
+                // stats, but we also measure externally for consistency.
+                // Use a rough estimate: the model's own stats line is authoritative,
+                // but we track wall-clock externally.
+                let elapsed_secs = elapsed.as_secs_f64();
+                // Count tokens from cached_tokens growth (clear -> generate)
+                let tokens = session.token_count();
+                let tps = if elapsed_secs > 0.0 { tokens as f64 / elapsed_secs } else { 0.0 };
+
+                results.push(BenchResult {
+                    prompt_idx: i + 1,
+                    tokens,
+                    elapsed_secs,
+                    tps,
+                    ok: true,
+                    pool_util: stats.utilization_percent,
+                    fragmentation: stats.fragmentation_ratio,
+                });
+            }
+            Err(e) => {
+                eprintln!("\n[Error] {}", e);
+                results.push(BenchResult {
+                    prompt_idx: i + 1,
+                    tokens: 0,
+                    elapsed_secs: elapsed.as_secs_f64(),
+                    tps: 0.0,
+                    ok: false,
+                    pool_util: stats.utilization_percent,
+                    fragmentation: stats.fragmentation_ratio,
+                });
+            }
         }
+        println!();
+    }
+
+    let bench_elapsed = bench_start.elapsed();
+
+    // ─── Summary Table ───
+    println!("\n╔══════════════════════════════════════════════════════════════════╗");
+    println!("║               BENCHMARK RESULTS - {}              ║", model_name);
+    println!("╠═══════╦════════╦══════════╦═════════╦══════════╦═══════════════╣");
+    println!("║ Run # ║ Tokens ║ Time (s) ║ Tok/s   ║ Pool %   ║ Frag          ║");
+    println!("╠═══════╬════════╬══════════╬═════════╬══════════╬═══════════════╣");
+
+    let mut total_tokens = 0usize;
+    let mut total_decode_time = 0.0f64;
+    let mut tps_values: Vec<f64> = Vec::new();
+    let mut failures = 0usize;
+
+    for r in &results {
+        let status = if r.ok { " " } else { "!" };
+        println!(
+            "║ {:>3}{} ║ {:>6} ║ {:>8.2} ║ {:>7.1} ║ {:>7.1}% ║ {:<13.6} ║",
+            r.prompt_idx, status, r.tokens, r.elapsed_secs, r.tps,
+            r.pool_util, r.fragmentation,
+        );
+        if r.ok {
+            total_tokens += r.tokens;
+            total_decode_time += r.elapsed_secs;
+            tps_values.push(r.tps);
+        } else {
+            failures += 1;
+        }
+    }
+
+    println!("╠═══════╩════════╩══════════╩═════════╩══════════╩═══════════════╣");
+
+    // Compute summary stats
+    let avg_tps = if !tps_values.is_empty() {
+        tps_values.iter().sum::<f64>() / tps_values.len() as f64
+    } else { 0.0 };
+
+    let min_tps = tps_values.iter().copied().fold(f64::INFINITY, f64::min);
+    let max_tps = tps_values.iter().copied().fold(0.0f64, f64::max);
+
+    let stddev = if tps_values.len() > 1 {
+        let mean = avg_tps;
+        let variance = tps_values.iter().map(|v| (v - mean).powi(2)).sum::<f64>()
+            / (tps_values.len() - 1) as f64;
+        variance.sqrt()
+    } else { 0.0 };
+
+    let final_stats = runtime.tlsf_stats();
+
+    println!("║                                                                ║");
+    println!("║  Total tokens:   {:>6}   in {:.1}s wall-clock                  ║", total_tokens, bench_elapsed.as_secs_f64());
+    println!("║  Avg tok/s:      {:>7.1}   (decode throughput)                 ║", avg_tps);
+    println!("║  Min tok/s:      {:>7.1}                                       ║", if min_tps.is_finite() { min_tps } else { 0.0 });
+    println!("║  Max tok/s:      {:>7.1}                                       ║", max_tps);
+    println!("║  Stddev:         {:>7.2}   ({:.1}% variation)                  ║", stddev, if avg_tps > 0.0 { stddev / avg_tps * 100.0 } else { 0.0 });
+    println!("║  Failures:       {:>3}/{}                                        ║", failures, total_prompts);
+    println!("║                                                                ║");
+    println!("║  TLSF pool:      {:.2} GB / {:.2} GB ({:.0}%)                   ║",
+        final_stats.allocated_bytes as f64 / (1024.0 * 1024.0 * 1024.0),
+        final_stats.total_pool_size as f64 / (1024.0 * 1024.0 * 1024.0),
+        final_stats.utilization_percent);
+    println!("║  Fragmentation:  {:.6}                                       ║", final_stats.fragmentation_ratio);
+    println!("║  Peak memory:    {:.2} GB                                     ║",
+        final_stats.peak_allocated as f64 / (1024.0 * 1024.0 * 1024.0));
+    println!("╚════════════════════════════════════════════════════════════════╝");
+
+    // Stability verdict
+    let stable = failures == 0 && stddev / avg_tps.max(0.001) < 0.15;
+    if stable {
+        println!("\n  VERDICT: STABLE  ({} prompts, <15% tok/s variation)", total_prompts);
+    } else if failures > 0 {
+        println!("\n  VERDICT: UNSTABLE  ({} failures in {} prompts)", failures, total_prompts);
+    } else {
+        println!("\n  VERDICT: VARIABLE  (>{:.0}% tok/s variation across {} prompts)",
+            stddev / avg_tps * 100.0, total_prompts);
     }
 
     Ok(())

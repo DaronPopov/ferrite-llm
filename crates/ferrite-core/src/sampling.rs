@@ -106,31 +106,46 @@ impl Sampler {
     }
 
     fn argmax(&self, logits: &Tensor) -> CandleResult<u32> {
-        let logits_vec: Vec<f32> = logits.to_vec1()?;
-        let (idx, _) = logits_vec
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())
-            .unwrap();
-        Ok(idx as u32)
+        // GPU-native argmax — single scalar download instead of full vocab
+        let idx = logits.argmax(D::Minus1)?;
+        Ok(idx.to_scalar::<u32>()?)
     }
 
     fn apply_repetition_penalty(&self, logits: &Tensor, previous_tokens: &[u32]) -> CandleResult<Tensor> {
-        let mut logits_vec: Vec<f32> = logits.to_vec1()?;
-        let penalty = self.config.repetition_penalty;
+        let penalty = self.config.repetition_penalty as f64;
+        let device = logits.device();
+        let vocab_size = logits.dims()[0];
 
-        for &token_id in previous_tokens {
-            if let Some(logit) = logits_vec.get_mut(token_id as usize) {
-                // If logit > 0, divide by penalty; if < 0, multiply by penalty
-                *logit = if *logit > 0.0 {
-                    *logit / penalty
-                } else {
-                    *logit * penalty
-                };
-            }
+        // Deduplicate token indices and clamp to vocab range
+        let mut token_set: Vec<u32> = previous_tokens.to_vec();
+        token_set.sort_unstable();
+        token_set.dedup();
+        token_set.retain(|&t| (t as usize) < vocab_size);
+
+        if token_set.is_empty() {
+            return Ok(logits.clone());
         }
 
-        Tensor::from_vec(logits_vec, logits.shape(), logits.device())
+        // Build penalty mask on GPU: 1.0 everywhere, penalty at seen positions
+        // For positive logits we divide (use 1/penalty), for negative we multiply (use penalty)
+        // Strategy: extract values at indices, compute per-token penalty, scatter back
+        let indices = Tensor::new(token_set.as_slice(), device)?;
+        let selected = logits.index_select(&indices, 0)?;
+
+        // positive → divide by penalty, negative → multiply by penalty
+        // equiv: where(selected > 0, selected / penalty, selected * penalty)
+        let zeros = Tensor::zeros_like(&selected)?;
+        let pos_mask = selected.gt(&zeros)?;  // bool: true where > 0
+
+        let divided = (&selected / penalty)?;
+        let multiplied = (&selected * penalty)?;
+
+        let penalized = pos_mask.where_cond(&divided, &multiplied)?;
+
+        // Scatter penalized values back into logits clone
+        // index_add with (penalized - selected) is the cleanest GPU approach
+        let diff = (&penalized - &selected)?;
+        logits.index_add(&indices, &diff, 0)
     }
 
     fn top_p_filter(&self, probs: &[f32]) -> Vec<f32> {

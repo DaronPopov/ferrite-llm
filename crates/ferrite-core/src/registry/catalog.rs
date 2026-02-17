@@ -63,6 +63,25 @@ impl Catalog {
             requires_auth: false,
         });
 
+        self.register(ModelSpec {
+            name: "openhermes-7b-q4".into(),
+            family: ModelFamily::Llama,
+            source: ModelSource::HuggingFace {
+                repo: "TheBloke/OpenHermes-2.5-Mistral-7B-GGUF".into(),
+                file: Some("openhermes-2.5-mistral-7b.Q4_K_M.gguf".into()),
+                revision: None,
+            },
+            format: WeightFormat::GGUF,
+            chat_template: ChatTemplate::ChatML,
+            context_length: 32768,
+            tokenizer: TokenizerSource::HuggingFace {
+                repo: "mistralai/Mistral-7B-Instruct-v0.2".into(),
+            },
+            description: "OpenHermes 2.5 Mistral 7B (4-bit quantized)".into(),
+            size: "7B".into(),
+            requires_auth: false,
+        });
+
         // ═══════════════════════════════════════════════════════════════
         // LLAMA 3 FAMILY
         // ═══════════════════════════════════════════════════════════════
