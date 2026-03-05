@@ -1,4 +1,4 @@
-# ferrite - transformer rust based WASM Runtime
+# ferrite-llm - transformer rust based WASM Runtime
 
 > Production-ready neural inference runtime with WASM sandboxing
 
