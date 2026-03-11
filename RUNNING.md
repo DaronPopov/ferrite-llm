@@ -24,6 +24,10 @@ The host loads models on the machine and exposes inference to the guest through 
 - `wasm32-wasip1` Rust target installed
 - optional: `HF_TOKEN` for gated Hugging Face models
 
+Jetson note:
+
+- on `aarch64` Jetsons, `install.sh` now auto-detects the platform and prefers `/usr/local/cuda-arm64` if that toolkit path exists
+
 You can bootstrap the WASM prerequisites with:
 
 ```bash
@@ -163,6 +167,7 @@ If a model needs custom CUDA operators, Ferrite's owned path is in:
 - [kernels](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels)
 - [kernel_config.toml](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels/kernel_config.toml)
 - [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs)
+- [custom-attention-bench.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-attention-bench.rs)
 
 Smoke-test the inline CUDA path with:
 
@@ -171,6 +176,12 @@ cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
 ```
 
 That verifies Rust-side NVRTC compilation, PTX loading, and kernel launch through Ferrite's `cudarc` path.
+
+Benchmark the owned attention kernel with:
+
+```bash
+cargo run -p ferrite-core --features cuda --example custom-attention-bench
+```
 
 ## Common Failures
 

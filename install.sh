@@ -7,6 +7,58 @@ INSTALL_ROOT="${FERRITE_INSTALL_ROOT:-$HOME/.local/share/ferrite-llm}"
 SRC_DIR="${FERRITE_SRC_DIR:-$INSTALL_ROOT/src/ferrite-llm}"
 PREFIX="${FERRITE_PREFIX:-$HOME/.local}"
 BIN_DIR="$PREFIX/bin"
+ARCH="$(uname -m)"
+JETSON_MODEL=""
+
+detect_jetson() {
+    if [ "$ARCH" != "aarch64" ]; then
+        return 1
+    fi
+
+    if [ -r /proc/device-tree/model ]; then
+        JETSON_MODEL="$(tr -d '\0' < /proc/device-tree/model)"
+    elif [ -r /etc/nv_tegra_release ]; then
+        JETSON_MODEL="NVIDIA Jetson"
+    fi
+
+    case "$JETSON_MODEL" in
+        *Jetson*|*Orin*)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+choose_cuda_home() {
+    if [ -n "${CUDA_HOME:-}" ] && [ -d "${CUDA_HOME:-}" ]; then
+        printf '%s\n' "$CUDA_HOME"
+        return 0
+    fi
+
+    if [ -n "${CUDA_PATH:-}" ] && [ -d "${CUDA_PATH:-}" ]; then
+        printf '%s\n' "$CUDA_PATH"
+        return 0
+    fi
+
+    if detect_jetson && [ -d /usr/local/cuda-arm64 ]; then
+        printf '%s\n' "/usr/local/cuda-arm64"
+        return 0
+    fi
+
+    if [ -d /usr/local/cuda ]; then
+        printf '%s\n' "/usr/local/cuda"
+        return 0
+    fi
+
+    if need_cmd nvcc; then
+        dirname "$(dirname "$(command -v nvcc)")"
+        return 0
+    fi
+
+    printf '%s\n' "/usr/local/cuda"
+}
 
 need_cmd() {
     command -v "$1" >/dev/null 2>&1
@@ -90,6 +142,17 @@ refresh_repo
 
 cd "$SRC_DIR"
 
+CUDA_HOME="$(choose_cuda_home)"
+export CUDA_HOME
+
+if detect_jetson; then
+    log "Detected Jetson platform: ${JETSON_MODEL:-aarch64}"
+    log "Using CUDA toolkit at $CUDA_HOME"
+else
+    log "Detected architecture: $ARCH"
+    log "Using CUDA toolkit at $CUDA_HOME"
+fi
+
 log "Refreshing Cargo dependencies"
 cargo update
 
@@ -124,6 +187,12 @@ Binary:
 
 Sample component:
   $SRC_DIR/target/wasm32-wasip1/release/mistral_inference.component.wasm
+
+Detected platform:
+  $ARCH${JETSON_MODEL:+ ($JETSON_MODEL)}
+
+CUDA toolkit:
+  $CUDA_HOME
 
 Suggested PATH update:
   export PATH="$BIN_DIR:\$PATH"

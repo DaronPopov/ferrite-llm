@@ -45,6 +45,11 @@ What it bootstraps automatically in user space:
 - `ferrite-rt`
 - WASM prerequisites and sample component build
 
+Installer notes:
+
+- on `aarch64` Jetsons, the installer now detects the platform and prefers `/usr/local/cuda-arm64` when present
+- the install path is intended to work on desktop Linux and Jetson-class ARM Linux with CUDA already installed
+
 The installer stays in user space. It does not attempt `apt`, `dnf`, or system package changes.
 
 ## Quick Run
@@ -115,6 +120,7 @@ Current examples include:
 Set the model at runtime with `FERRITE_MODEL=<registry-name>`. Rebuilding the guest is not required just to switch models.
 
 For custom architectures or model-specific fused operators, Ferrite also owns a custom CUDA kernel path in [crates/ferrite-core](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core). Kernel sources live under [kernels](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels), and the owned smoke example is [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs).
+The owned attention benchmark is [custom-attention-bench.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-attention-bench.rs).
 
 ## Streaming
 
