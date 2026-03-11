@@ -209,12 +209,12 @@ impl Catalog {
             family: ModelFamily::Llama,
             source: ModelSource::HuggingFace {
                 repo: "Qwen/Qwen3-8B-GGUF".into(),
-                file: Some("qwen3-8b-q4_k_m.gguf".into()),
+                file: Some("Qwen3-8B-Q4_K_M.gguf".into()),
                 revision: None,
             },
             format: WeightFormat::GGUF,
             chat_template: ChatTemplate::ChatML,
-            context_length: 40960,
+            context_length: 32768,
             tokenizer: TokenizerSource::HuggingFace {
                 repo: "Qwen/Qwen3-8B".into(),
             },

@@ -15,16 +15,17 @@ struct MistralDemo;
 
 impl Guest for MistralDemo {
     fn run() -> Result<(), String> {
-        println!("🔥 Mistral 7B Quantized Inference - WASM Edition");
+        println!("🔥 Ferrite LLM Inference - WASM Edition");
         println!("================================================\n");
 
-        // Load the quantized Mistral model
-        println!("📦 Loading Mistral 7B Q4 (4-bit quantized)...");
-        println!("⏳ This may take a minute on first run (downloading ~4GB model)...\n");
-
         let hf_token = std::env::var("HF_TOKEN").ok();
+        let model_name =
+            std::env::var("FERRITE_MODEL").unwrap_or_else(|_| "mistral-7b-q4".to_string());
 
-        let model = load_model("mistral-7b-q4", hf_token.as_deref())?;
+        println!("📦 Loading model: {model_name}");
+        println!("⏳ This may take a minute on first run (downloading model weights)...\n");
+
+        let model = load_model(&model_name, hf_token.as_deref())?;
 
         println!("✅ Model loaded successfully!\n");
 
@@ -59,7 +60,7 @@ impl Guest for MistralDemo {
             }
 
             println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-            print!("🤖 Mistral: ");
+            print!("🤖 {model_name}: ");
             io::stdout().flush().map_err(|e| e.to_string())?;
 
             match model.start_generate_stream(prompt, config) {

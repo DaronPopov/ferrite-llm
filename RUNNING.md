@@ -2,6 +2,11 @@
 
 This guide is the shortest path to getting the Ferrite runtime working locally.
 
+Use one of these two flows:
+
+- repo workflow: run from a cloned checkout with `cargo run -p ferrite-cli -- ...`
+- installed workflow: run the installed `ferrite-rt` binary after `install.sh`
+
 ## What This Runs
 
 Ferrite has two layers:
@@ -54,9 +59,19 @@ wasm-tools component new \
   -o target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```
 
+## Check Runtime Policy
+
+Before loading a model, inspect the resolved runtime policy:
+
+```bash
+cargo run -p ferrite-cli -- info
+```
+
+That reports CUDA availability, backend policy, and whether CUDA is required.
+
 ## Pick A Model
 
-The example guest decides which model to load in:
+The example guest reads the model name from `FERRITE_MODEL` at runtime:
 
 [examples/wasm/mistral-inference/src/lib.rs](/home/daron/llm_engine/fer_llm/ferrite/examples/wasm/mistral-inference/src/lib.rs)
 
@@ -66,41 +81,42 @@ Examples:
 - `qwen2.5-7b-q4`
 - `qwen3-8b-q4`
 
-Change the `load_model(...)` string, then rebuild the guest component.
-
 ## Run The Runtime
 
-### CUDA path, fail if GPU is not available
+### Repo workflow
+
+Use this while developing locally. It avoids stale installed binaries when the WIT interface changes.
 
 ```bash
 HF_TOKEN=your_token_here \
-FERRITE_REQUIRE_CUDA=1 \
-cargo run -p ferrite-cli -- \
-  run target/wasm32-wasip1/release/mistral_inference.component.wasm
-```
-
-### Force the `mistralrs` backend
-
-```bash
-HF_TOKEN=your_token_here \
+FERRITE_MODEL=mistral-7b-q4 \
 FERRITE_REQUIRE_CUDA=1 \
 FERRITE_BACKEND=mistralrs \
 cargo run -p ferrite-cli -- \
   run target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```
 
-### Qwen3 example
+### Installed workflow
 
-After changing the guest to:
+Use this after running the one-line installer:
 
-```rust
-let model = load_model("qwen3-8b-q4", hf_token.as_deref())?;
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+HF_TOKEN=your_token_here \
+FERRITE_MODEL=mistral-7b-q4 \
+FERRITE_REQUIRE_CUDA=1 \
+FERRITE_BACKEND=mistralrs \
+ferrite-rt run \
+  "$HOME/.local/share/ferrite-llm/src/ferrite-llm/target/wasm32-wasip1/release/mistral_inference.component.wasm"
 ```
 
-run:
+### Qwen3 example
+
+Set the model name at runtime:
 
 ```bash
 HF_TOKEN=your_token_here \
+FERRITE_MODEL=qwen3-8b-q4 \
 FERRITE_REQUIRE_CUDA=1 \
 FERRITE_BACKEND=mistralrs \
 cargo run -p ferrite-cli -- \
@@ -110,6 +126,7 @@ cargo run -p ferrite-cli -- \
 ## Useful Environment Variables
 
 - `HF_TOKEN`: Hugging Face token
+- `FERRITE_MODEL=qwen3-8b-q4`: select the model registry entry to load
 - `FERRITE_REQUIRE_CUDA=1`: fail instead of silently falling back to CPU
 - `FERRITE_BACKEND=mistralrs`: force the `mistralrs` backend
 - `FERRITE_BACKEND=candle`: force the Candle backend
@@ -121,8 +138,16 @@ Legacy compatibility:
 
 ## Inspect Available Models
 
+Repo workflow:
+
 ```bash
 cargo run -p ferrite-cli -- models
+```
+
+Installed workflow:
+
+```bash
+ferrite-rt models
 ```
 
 ## Common Failures
@@ -130,6 +155,28 @@ cargo run -p ferrite-cli -- models
 ### `No such file or directory (os error 2)`
 
 You passed the wrong WASM component path or did not build the component yet.
+
+For a repo checkout, the expected component path is:
+
+```bash
+target/wasm32-wasip1/release/mistral_inference.component.wasm
+```
+
+For an installed setup, the expected component path is:
+
+```bash
+$HOME/.local/share/ferrite-llm/src/ferrite-llm/target/wasm32-wasip1/release/mistral_inference.component.wasm
+```
+
+### `resource implementation is missing`
+
+Your guest component and host runtime are out of sync.
+
+Use `cargo run -p ferrite-cli -- ...` in a repo checkout, or reinstall the host binary with:
+
+```bash
+cargo install --path crates/ferrite-cli --force
+```
 
 ### CPU fallback
 
@@ -164,6 +211,6 @@ wasm-tools component new \
   target/wasm32-wasip1/release/mistral_inference.embed.wasm \
   --adapt adapters/wasi_snapshot_preview1.reactor.wasm \
   -o target/wasm32-wasip1/release/mistral_inference.component.wasm
-HF_TOKEN=your_token_here FERRITE_REQUIRE_CUDA=1 cargo run -p ferrite-cli -- \
+HF_TOKEN=your_token_here FERRITE_MODEL=qwen3-8b-q4 FERRITE_REQUIRE_CUDA=1 cargo run -p ferrite-cli -- \
   run target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```

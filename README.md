@@ -53,11 +53,21 @@ After install:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 HF_TOKEN=your_token_here \
+FERRITE_MODEL=qwen3-8b-q4 \
 FERRITE_REQUIRE_CUDA=1 \
 FERRITE_BACKEND=mistralrs \
 ferrite-rt run \
   ~/.local/share/ferrite-llm/src/ferrite-llm/target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```
+
+For local development from a repo checkout, prefer:
+
+```bash
+cargo run -p ferrite-cli -- \
+  run target/wasm32-wasip1/release/mistral_inference.component.wasm
+```
+
+That keeps the host binary in sync with WIT changes and avoids stale installed binaries.
 
 ## Backend Model
 
@@ -100,6 +110,8 @@ Current examples include:
 - `mistral-7b-q4`
 - `qwen2.5-7b-q4`
 - `qwen3-8b-q4`
+
+Set the model at runtime with `FERRITE_MODEL=<registry-name>`. Rebuilding the guest is not required just to switch models.
 
 ## Streaming
 
