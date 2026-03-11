@@ -31,6 +31,7 @@ What it does:
 - installs `ferrite-rt` into `~/.local/bin`
 - provisions WASM prerequisites with `ferrite-rt setup`
 - builds the sample guest component
+- verifies the owned custom CUDA kernel path with `custom-kernel-smoke`
 
 Requirements:
 

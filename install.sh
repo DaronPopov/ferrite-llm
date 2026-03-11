@@ -109,6 +109,9 @@ wasm-tools component new \
   --adapt adapters/wasi_snapshot_preview1.reactor.wasm \
   -o target/wasm32-wasip1/release/mistral_inference.component.wasm
 
+log "Verifying Ferrite custom CUDA kernel path"
+cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
+
 cat <<EOF
 
 Ferrite install complete.

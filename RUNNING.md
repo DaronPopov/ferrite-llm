@@ -110,6 +110,12 @@ ferrite-rt run \
   "$HOME/.local/share/ferrite-llm/src/ferrite-llm/target/wasm32-wasip1/release/mistral_inference.component.wasm"
 ```
 
+The installer also verifies Ferrite's owned CUDA kernel path by running:
+
+```bash
+cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
+```
+
 ### Qwen3 example
 
 Set the model name at runtime:
