@@ -1,11 +1,13 @@
-# ferrite-llm - transformer rust based WASM Runtime
+# ferrite-llm
+
+Transformer inference runtime with WASM sandboxing.
 
 > Production-ready neural inference runtime with WASM sandboxing
 
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Ferrite is a modular framework for running neural inference workloads in WebAssembly sandboxes. It provides a clean separation between the inference engine, WASM orchestration, and guest modules, enabling safe, portable AI deployments.
+`ferrite-llm` is a modular framework for running neural inference workloads in WebAssembly sandboxes. It separates the inference engine, WASM orchestration, and guest modules so deployments stay portable and contained.
 
 ## 🏗️ Architecture
 
@@ -37,10 +39,10 @@ ferrite/
 ### Install the Runtime
 
 ```bash
-  git clone https://github.com/DaronPopov/ferrite.git                            
-  cd ferrite                                                                     
-  cargo install --path crates/ferrite-cli                                        
-                                           
+git clone https://github.com/DaronPopov/ferrite.git
+cd ferrite
+cargo install --path crates/ferrite-cli
+ferrite-rt setup
 ```
 
 ### Run an AI Module
@@ -57,6 +59,10 @@ cargo build -p mistral-inference --target wasm32-wasip1 --release
   ferrite-rt run target/wasm32-wasip1/release/mistral_inference.component.wasm
 
 ```
+
+`ferrite-rt setup` is idempotent and installs the local WASM build prerequisites used by the examples:
+- `rustup target add wasm32-wasip1`
+- `cargo install wasm-tools`
 
 ### Write Your First AI Module
 
