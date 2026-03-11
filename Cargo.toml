@@ -14,7 +14,7 @@ resolver = "2"
 version = "0.3.0"
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/DaronPopov/ferrite"
+repository = "https://github.com/DaronPopov/ferrite-llm"
 
 # Shared dependencies across workspace
 [workspace.dependencies]

@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2021"
 description = "Guest SDK for writing neural inference WASM modules"
 license = "MIT"
-repository = "https://github.com/DaronPopov/ferrite"
+repository = "https://github.com/DaronPopov/ferrite-llm"
 keywords = ["wasm", "sdk", "inference", "guest", "component-model"]
 categories = ["wasm", "development-tools"]
 
