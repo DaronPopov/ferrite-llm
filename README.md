@@ -46,21 +46,16 @@ ferrite/
 ### Run an AI Module
 
 ```bash
-# Show system info
-ferrite-rt info
+cargo build -p mistral-inference --target wasm32-wasip1 --release
+  wasm-tools component embed wit \
+    target/wasm32-wasip1/release/mistral_inference.wasm \
+    -o target/wasm32-wasip1/release/mistral_inference.embed.wasm
+  wasm-tools component new \
+    target/wasm32-wasip1/release/mistral_inference.embed.wasm \
+    --adapt adapters/wasi_snapshot_preview1.reactor.wasm \
+    -o target/wasm32-wasip1/release/mistral_inference.component.wasm
+  ferrite-rt run target/wasm32-wasip1/release/mistral_inference.component.wasm
 
-# List cached models
-ferrite-rt models
-
-# Run a WASM module
-ferrite-rt run examples/mistral-chat.wasm
-
-# With custom settings
-ferrite-rt run module.wasm \
-  --hf-token $HF_TOKEN \
-  --model-cache ~/.cache/ferrite \
-  --metrics \
-  -v
 ```
 
 ### Write Your First AI Module
