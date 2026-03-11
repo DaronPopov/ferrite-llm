@@ -14,7 +14,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Core ferrite engine
-ferrite-core = { path = "../ferrite-core" }
+ferrite-core = { path = "../ferrite-core", default-features = false }
 
 # Candle for real inference
 candle-core = "0.8"

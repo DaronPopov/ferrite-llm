@@ -475,7 +475,7 @@ fn print_status(name: &str, installed: bool, description: &str) {
 fn command_exists(program: &str) -> bool {
     std::env::var_os("PATH")
         .into_iter()
-        .flat_map(std::env::split_paths)
+        .flat_map(|unparsed| std::env::split_paths(&unparsed).collect::<Vec<_>>())
         .map(|dir| dir.join(program))
         .any(|path| path.is_file())
 }
