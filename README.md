@@ -113,6 +113,8 @@ Current examples include:
 
 Set the model at runtime with `FERRITE_MODEL=<registry-name>`. Rebuilding the guest is not required just to switch models.
 
+For custom architectures or model-specific fused operators, Ferrite also owns a custom CUDA kernel path in [crates/ferrite-core](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core). Kernel sources live under [kernels](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels), and the owned smoke example is [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs).
+
 ## Streaming
 
 True live token streaming across the WASM boundary now uses a polling handle in [ferrite.wit](/home/daron/llm_engine/fer_llm/ferrite/wit/ferrite.wit):

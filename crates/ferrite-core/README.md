@@ -61,6 +61,23 @@ let response2 = session.user_turn("Tell me more about ownership.")?;
 ferrite-core = { version = "0.3", features = ["cuda"] }
 ```
 
+## Custom CUDA Kernels
+
+Ferrite owns a custom-kernel path in this crate. This is the place to wire model-specific CUDA code that should live with the inference engine.
+
+- Kernel sources live in `crates/ferrite-core/kernels/`
+- Kernel build settings live in `crates/ferrite-core/kernels/kernel_config.toml`
+- The build script compiles enabled kernels during `cargo build --features cuda`
+- A minimal end-to-end smoke example lives at `crates/ferrite-core/examples/custom-kernel-smoke.rs`
+
+Run the smoke test with:
+
+```bash
+cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
+```
+
+Use this path when a model needs custom CUDA operators beyond the standard Candle or `mistralrs` backends.
+
 ## License
 
 MIT

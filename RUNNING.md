@@ -150,6 +150,22 @@ Installed workflow:
 ferrite-rt models
 ```
 
+## Custom CUDA Kernels
+
+If a model needs custom CUDA operators, Ferrite's owned path is in:
+
+- [kernels](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels)
+- [kernel_config.toml](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels/kernel_config.toml)
+- [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs)
+
+Smoke-test the inline CUDA path with:
+
+```bash
+cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
+```
+
+That verifies Rust-side NVRTC compilation, PTX loading, and kernel launch through Ferrite's `cudarc` path.
+
 ## Common Failures
 
 ### `No such file or directory (os error 2)`
