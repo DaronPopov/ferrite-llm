@@ -1,0 +1,15 @@
+[package]
+name = "ptx-sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["PTX-OS Team"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DaronPopov/ferriterc"
+description = "Raw FFI bindings to PTX-OS GPU runtime and cuBLAS"
+build = "build.rs"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+# No bindgen - we use manual bindings for reliability

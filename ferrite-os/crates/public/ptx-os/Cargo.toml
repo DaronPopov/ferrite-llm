@@ -1,0 +1,35 @@
+[package]
+name = "ptx-os"
+version = "0.1.0"
+edition = "2021"
+authors = ["PTX-OS Team"]
+license = "MIT OR Apache-2.0"
+description = "PTX-OS: GPU Operating System with Stream-Ordered TLSF Allocator"
+repository = "https://github.com/ptx-os/ptx-os"
+readme = "README.md"
+keywords = ["gpu", "cuda", "allocator", "os", "runtime"]
+categories = ["hardware-support", "memory-management", "concurrency"]
+
+[dependencies]
+# Core runtime - this is what users interact with
+ptx-runtime = { workspace = true }
+ptx-kernels = { workspace = true }
+ptx-sys = { workspace = true }
+
+# Optional higher-level abstractions
+ptx-compute = { workspace = true, optional = true }
+ptx-tensor = { workspace = true, optional = true }
+ptx-autograd = { workspace = true, optional = true }
+
+[features]
+default = ["runtime"]
+runtime = []
+compute = ["ptx-compute"]
+tensor = ["ptx-tensor", "compute"]
+autograd = ["ptx-autograd", "tensor"]
+full = ["runtime", "compute", "tensor", "autograd"]
+
+# Re-export everything for convenience
+[lib]
+name = "ptx_os"
+path = "src/lib.rs"

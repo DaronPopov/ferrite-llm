@@ -1,0 +1,18 @@
+[package]
+name = "ferrite-graphics"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "GPU software rasterization for Ferrite-OS — 3D graphics as tensor compute"
+
+[dependencies]
+ptx-sys = { workspace = true }
+ptx-runtime = { workspace = true }
+ptx-tensor = { path = "../../internal/ptx-tensor" }
+ptx-render = { workspace = true }
+ferrite-window = { path = "../ferrite-window" }
+thiserror = { workspace = true }
+bytemuck = { workspace = true }
+
+[dev-dependencies]

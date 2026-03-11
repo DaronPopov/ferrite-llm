@@ -1,0 +1,25 @@
+[package]
+name = "ferrite-window"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Cross-platform window system for Ferrite-OS using native OS display drivers"
+
+[features]
+default = []
+
+[dependencies]
+
+[target.'cfg(unix)'.dependencies]
+x11rb = { version = "0.13", features = ["allow-unsafe-code"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_LibraryLoader",
+    "Win32_Graphics_Gdi",
+] }
+
+[dev-dependencies]

@@ -1,0 +1,12 @@
+[package]
+name = "ptx-runner"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "PTX-OS workspace runner"
+
+[dependencies]
+ferrite-platform = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

@@ -1,0 +1,1 @@
+{"schema_version":1,"compiler_fingerprint":5169785065316197999,"program":{"nodes":[{"op":{"Input":{"shape":[1,1,1,4096]}}},{"op":{"Relu":0}},{"op":{"Tanh":1}},{"op":{"Sigmoid":2}}],"shapes":[[1,1,1,4096],[1,1,1,4096],[1,1,1,4096],[1,1,1,4096]],"numels":[4096,4096,4096,4096],"input_ids":[0],"output":3}}

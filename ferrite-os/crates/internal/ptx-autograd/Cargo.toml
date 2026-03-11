@@ -1,0 +1,18 @@
+[package]
+name = "ptx-autograd"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Automatic differentiation for PTX-OS tensor library"
+
+[dependencies]
+ptx-sys = { workspace = true }
+ptx-runtime = { workspace = true }
+ptx-tensor = { workspace = true }
+ptx-compiler = { workspace = true }
+libc = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+smallvec = { workspace = true }
+indexmap = { workspace = true }

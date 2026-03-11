@@ -1,0 +1,687 @@
+PTX-OS Benchmark Run
+Timestamp: Sat Feb  7 05:47:25 AM PST 2026
+Host: daron-ROG-Strix-G15CE-G15CE
+Workspace: /home/daron/fdfd/ferriterc/ferrite-os
+Commit: da43a5613f8640a21f03b1fda399c40a4e6d9f98
+GPU: NVIDIA GeForce RTX 3070, 560.35.05, 8192 MiB
+
+Environment:
+CUDA_PATH=/usr/local/cuda
+CUDA_LIB=/usr/local/cuda/lib64
+NVCC=/usr/local/cuda/bin/nvcc
+CUDA_VERSION=12.6
+GPU_SM=86
+PTX_GPU_SM=sm_86
+
+=== Runtime Jitter Benchmark ===
+cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example jitter_benchmark
+    Finished `release` profile [optimized] target(s) in 0.03s
+     Running `target/release/examples/jitter_benchmark`
+╔════════════════════════════════════════════════════════════╗
+║  📊 JITTER & LATENCY DISTRIBUTION BENCHMARK 📊             ║
+║                                                            ║
+║  Testing timing consistency under massive concurrency!    ║
+║  Production needs PREDICTABLE latency! ⚡                  ║
+╚════════════════════════════════════════════════════════════╝
+
+⚡ Initializing PTX-OS runtime...
+  ✓ TLSF Pool: 5.26 GB
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 1: ALLOCATION JITTER
+═══════════════════════════════════════════════════════════
+  Measuring TLSF allocation latency distribution
+  Looking for consistent sub-microsecond performance
+
+  Collecting 10000 allocation samples...
+
+  📊 TLSF Allocation Latency Distribution:
+    ─────────────────────────────────────────
+    Samples:  10000
+    Min:         88.00ns
+    p50:         93.00ns
+    p95:         99.00ns
+    p99:        104.00ns
+    p99.9:      174.00ns
+    Max:          3.62µs
+    Mean:        95.00ns
+    Std Dev:       48.73 ns
+    ─────────────────────────────────────────
+    Jitter (p99/p50): 1.12x
+    ✅ EXCELLENT! Very low jitter!
+    Tail (max/p99): 34.81x
+    ❌ Significant outliers detected!
+
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 2: KERNEL LAUNCH JITTER
+═══════════════════════════════════════════════════════════
+  Measuring kernel launch latency distribution
+  Testing consistency across thousands of launches
+
+  Collecting 10000 kernel launch samples...
+
+  📊 Kernel Launch Latency Distribution:
+    ─────────────────────────────────────────
+    Samples:  10000
+    Min:        947.00ns
+    p50:         23.26µs
+    p95:         24.07µs
+    p99:         32.53µs
+    p99.9:      513.07µs
+    Max:          1.51ms
+    Mean:        22.88µs
+    Std Dev:    31485.39 ns
+    ─────────────────────────────────────────
+    Jitter (p99/p50): 1.40x
+    ✅ EXCELLENT! Very low jitter!
+    Tail (max/p99): 46.56x
+    ❌ Significant outliers detected!
+
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 3: STREAM INTERFERENCE TEST
+═══════════════════════════════════════════════════════════
+  Do streams affect each other's latency?
+  Comparing: 1 stream vs 100 streams vs 1000 streams
+
+  Testing with 1 concurrent streams...
+    p50:   1.35µs  p95:   1.42µs  p99:   1.52µs  p99.9:  13.32µs
+  Testing with 10 concurrent streams...
+    p50:   1.45µs  p95:   1.75µs  p99:  10.39µs  p99.9:  14.66µs
+  Testing with 100 concurrent streams...
+    p50:   1.99µs  p95:   2.54µs  p99:   3.18µs  p99.9:  14.20µs
+  Testing with 500 concurrent streams...
+    p50:   3.69µs  p95:   4.61µs  p99:   5.44µs  p99.9:  15.41µs
+  Testing with 1000 concurrent streams...
+    p50:   2.84µs  p95:   6.92µs  p99:  11.75µs  p99.9:  19.93µs
+
+  📊 ANALYSIS:
+    If p99 stays consistent → No interference! ✅
+    If p99 increases → Streams interfere ❌
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 4: END-TO-END LATENCY
+═══════════════════════════════════════════════════════════
+  Full pipeline: Allocate → Launch → Execute → Free
+  Measuring total latency under concurrent load
+
+  Collecting 5000 end-to-end samples...
+  Pipeline: Alloc → Launch → Sync → Free
+
+  📊 End-to-End Latency Distribution:
+    ─────────────────────────────────────────
+    Samples:  5000
+    Min:         25.84µs
+    p50:         27.45µs
+    p95:         29.22µs
+    p99:         39.00µs
+    p99.9:      308.57µs
+    Max:        353.84µs
+    Mean:        28.90µs
+    Std Dev:    15150.17 ns
+    ─────────────────────────────────────────
+    Jitter (p99/p50): 1.42x
+    ✅ EXCELLENT! Very low jitter!
+    Tail (max/p99): 9.07x
+    ❌ Significant outliers detected!
+
+
+╔════════════════════════════════════════════════════════════╗
+║  🎉 JITTER ANALYSIS COMPLETE! 🎉                           ║
+║                                                            ║
+║  Check if your system has production-grade consistency!   ║
+╚════════════════════════════════════════════════════════════╝
+[Ferrite-OS] Captured primary context 0x5aa26253b8d0 for device 0
+[Ferrite-OS] Initializing GPU Hot Runtime on device 0
+[Ferrite-OS] Attached to global state (client mode)
+[Ferrite-OS] Global state mapped to GPU context
+[Ferrite-OS] Device: NVIDIA GeForce RTX 3070
+[Ferrite-OS] Compute Capability: 8.6
+[Ferrite-OS] Total VRAM: 7.68 GB
+[Ferrite-OS] Created 1024 async streams (Priority Range: 0 to -5)
+[Ferrite-OS] Pool Configuration:
+[Ferrite-OS]   Mode: 75% of available VRAM
+[Ferrite-OS]   Available VRAM: 6.53 GB (6.91 GB total, 0.38 GB reserved)
+[Ferrite-OS]   Claiming: 4.90 GB for Hot Pool
+[Ferrite-OS] VRAM pool allocated: 4.90 GB
+[Ferrite-OS] Initializing Enhanced TLSF Allocator...
+[TLSF] Allocator created: 5015.68 MB pool
+[Ferrite-OS] Enhanced TLSF allocator initialized
+[Ferrite-OS]      - O(1) allocation/deallocation
+[Ferrite-OS]      - O(1) block lookup via hash table
+[Ferrite-OS]      - Memory leak detection enabled
+[Ferrite-OS]      - Pool health monitoring active
+[Ferrite-OS] Memory allocator ready
+[Ferrite-OS] CUDA graphs initialized
+[Ferrite-OS] Runtime initialized
+
+[Ferrite-OS] Shutting down GPU Hot Runtime...
+[Ferrite-OS] Destroying enhanced TLSF allocator...
+[TLSF] Allocator destroyed
+[Ferrite-OS] Shutdown complete
+
+=== Fused Kernel Benchmark ===
+cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example fused_kernel_benchmark
+    Finished `release` profile [optimized] target(s) in 0.03s
+     Running `target/release/examples/fused_kernel_benchmark`
+╔════════════════════════════════════════════════════════════╗
+║  🚀 FUSED KERNEL BENCHMARK - MAXIMUM THROUGHPUT! 🚀        ║
+║                                                            ║
+║  Launch THOUSANDS of fused kernel chains!                 ║
+║  Test the LIMITS of your system! 🔥                       ║
+╚════════════════════════════════════════════════════════════╝
+
+⚡ Initializing PTX-OS runtime...
+  ✓ TLSF Pool: 5.26 GB
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 1: UNFUSED vs FUSED COMPARISON
+═══════════════════════════════════════════════════════════
+  Comparing kernel fusion benefits
+
+  Chain count: 1000
+  Elements per chain: 1M
+
+  🔧 Testing UNFUSED kernels (3 separate launches)...
+    Time: 66.228732ms
+    Throughput: 15099.19 chains/sec
+
+  🔥 Testing FUSED kernels (optimized chain)...
+    Time: 65.085521ms
+    Throughput: 15364.40 chains/sec
+
+  📊 COMPARISON:
+    Unfused: 66.228732ms
+    Fused:   65.085521ms
+    Speedup: 1.02x
+    Memory saved: 50.0%
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 2: MASSIVE PARALLEL FUSED CHAINS
+═══════════════════════════════════════════════════════════
+  Launch THOUSANDS of fused kernel chains concurrently!
+
+  Testing: 1K chains × 2M elements
+    Time: 219.730578ms
+    Throughput: 4.55K chains/sec
+    Kernel rate: 0.02M kernels/sec
+    GFLOPS: 47.72
+
+  Testing: 5K chains × 1M elements
+    Time: 535.563554ms
+    Throughput: 9.34K chains/sec
+    Kernel rate: 0.05M kernels/sec
+    GFLOPS: 48.95
+
+  Testing: 10K chains × 512K elements
+    Time: 235.381229ms
+    Throughput: 42.48K chains/sec
+    Kernel rate: 0.21M kernels/sec
+    GFLOPS: 111.37
+
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 3: DEEP FUSION CHAINS
+═══════════════════════════════════════════════════════════
+  Test deep fusion: 10+ operations per chain!
+
+  Chains: 1000
+  Fusion depth: 15 operations
+  Elements: 1M
+
+  📊 RESULTS:
+    Time: 319.22999ms
+    Total kernels: 15000
+    Kernel rate: 0.05M kernels/sec
+    GFLOPS: 49.27
+
+  ✅ Successfully ran 1000 deep fusion chains!
+  ✅ 15 kernels per chain - INSANE depth!
+
+═══════════════════════════════════════════════════════════
+🎯 TEST 4: MAXIMUM THROUGHPUT STRESS TEST
+═══════════════════════════════════════════════════════════
+  Push the system to ABSOLUTE LIMITS!
+
+  🔥 PUSHING TO ABSOLUTE LIMITS! 🔥
+
+  Attempting: 5000 chains × 1024K elements...
+    ✅ SUCCESS!
+       Time: 311.643244ms
+       Kernels: 15000
+       Kernel rate: 0.05M/sec
+       GFLOPS: 50.47
+
+  Attempting: 10000 chains × 512K elements...
+    ✅ SUCCESS!
+       Time: 134.645598ms
+       Kernels: 30000
+       Kernel rate: 0.22M/sec
+       GFLOPS: 116.82
+
+  Attempting: 20000 chains × 256K elements...
+    ✅ SUCCESS!
+       Time: 183.034062ms
+       Kernels: 60000
+       Kernel rate: 0.33M/sec
+       GFLOPS: 85.93
+
+  Attempting: 50000 chains × 128K elements...
+    ✅ SUCCESS!
+       Time: 463.966772ms
+       Kernels: 150000
+       Kernel rate: 0.32M/sec
+       GFLOPS: 42.38
+
+
+╔════════════════════════════════════════════════════════════╗
+║  🎉 FUSED KERNEL BENCHMARK COMPLETE! 🎉                    ║
+║                                                            ║
+║  Your system can handle INSANE parallelism! 🚀            ║
+╚════════════════════════════════════════════════════════════╝
+[Ferrite-OS] Captured primary context 0x56936f7908d0 for device 0
+[Ferrite-OS] Initializing GPU Hot Runtime on device 0
+[Ferrite-OS] Attached to global state (client mode)
+[Ferrite-OS] Global state mapped to GPU context
+[Ferrite-OS] Device: NVIDIA GeForce RTX 3070
+[Ferrite-OS] Compute Capability: 8.6
+[Ferrite-OS] Total VRAM: 7.68 GB
+[Ferrite-OS] Created 1024 async streams (Priority Range: 0 to -5)
+[Ferrite-OS] Pool Configuration:
+[Ferrite-OS]   Mode: 75% of available VRAM
+[Ferrite-OS]   Available VRAM: 6.54 GB (6.92 GB total, 0.38 GB reserved)
+[Ferrite-OS]   Claiming: 4.90 GB for Hot Pool
+[Ferrite-OS] VRAM pool allocated: 4.90 GB
+[Ferrite-OS] Initializing Enhanced TLSF Allocator...
+[TLSF] Allocator created: 5019.90 MB pool
+[Ferrite-OS] Enhanced TLSF allocator initialized
+[Ferrite-OS]      - O(1) allocation/deallocation
+[Ferrite-OS]      - O(1) block lookup via hash table
+[Ferrite-OS]      - Memory leak detection enabled
+[Ferrite-OS]      - Pool health monitoring active
+[Ferrite-OS] Memory allocator ready
+[Ferrite-OS] CUDA graphs initialized
+[Ferrite-OS] Runtime initialized
+
+[Ferrite-OS] Shutting down GPU Hot Runtime...
+[Ferrite-OS] Destroying enhanced TLSF allocator...
+[TLSF] Allocator destroyed
+[Ferrite-OS] Shutdown complete
+
+=== Candle Performance Benchmark ===
+cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example candle_performance_benchmark
+    Finished `release` profile [optimized] target(s) in 0.03s
+     Running `target/release/examples/candle_performance_benchmark`
+╔════════════════════════════════════════════════════════════╗
+║  ⚡ CANDLE KERNEL PERFORMANCE BENCHMARK ⚡                 ║
+║                                                            ║
+║  Maximum compute throughput with TLSF orchestration       ║
+║  Let's see some REAL numbers! 🔥                          ║
+╚════════════════════════════════════════════════════════════╝
+
+⚡ Initializing PTX-OS runtime...
+  ✓ PTX-OS initialized
+  Streams: 1024
+  TLSF Pool: 5.62 GB
+
+═══════════════════════════════════════════════════════════
+🎯 TEST: 8 streams × 32M elements - WARMUP
+═══════════════════════════════════════════════════════════
+  Concurrent streams: 8
+  Elements per stream: 33.55M
+  Total elements: 268.44M
+  Memory per stream: 402.65 MB
+  Total memory: 3.22 GB
+
+🌊 TLSF Allocation Phase...
+  ✓ Allocated 3.22 GB in 9.404µs
+    Bandwidth: 342537.80 GB/s
+
+🚀 Kernel Launch Phase...
+  ✓ Launched 48 kernels in 1.561447ms
+    Launch rate: 30.74K kernels/sec
+
+⚡ GPU Execution Phase...
+  ✓ Execution complete in 37.326014ms
+
+  📊 PERFORMANCE METRICS:
+    ─────────────────────────────────────
+    Compute:      273.28 GFLOPS
+    Memory BW:    345.20 GB/s
+    Operations:   10.20B FLOPs
+    Elements:     268.44M
+    Kernels:      48
+    ─────────────────────────────────────
+
+🧹 TLSF Cleanup Phase...
+  ✓ Freed 3.22 GB in 8.135µs
+    Bandwidth: 395971.17 GB/s
+
+  ⏱️  TOTAL TIME: 38.905ms
+    (Alloc: 9.404µs + Launch: 1.561447ms + Exec: 37.326014ms + Free: 8.135µs)
+
+═══════════════════════════════════════════════════════════
+🎯 TEST: 16 streams × 16M elements - GETTING HOT
+═══════════════════════════════════════════════════════════
+  Concurrent streams: 16
+  Elements per stream: 16.78M
+  Total elements: 268.44M
+  Memory per stream: 201.33 MB
+  Total memory: 3.22 GB
+
+🌊 TLSF Allocation Phase...
+  ✓ Allocated 3.22 GB in 12.613µs
+    Bandwidth: 255389.32 GB/s
+
+🚀 Kernel Launch Phase...
+  ✓ Launched 96 kernels in 155.782µs
+    Launch rate: 616.25K kernels/sec
+
+⚡ GPU Execution Phase...
+  ✓ Execution complete in 38.013023ms
+
+  📊 PERFORMANCE METRICS:
+    ─────────────────────────────────────
+    Compute:      268.34 GFLOPS
+    Memory BW:    338.96 GB/s
+    Operations:   10.20B FLOPs
+    Elements:     268.44M
+    Kernels:      96
+    ─────────────────────────────────────
+
+🧹 TLSF Cleanup Phase...
+  ✓ Freed 3.22 GB in 5.952µs
+    Bandwidth: 541200.52 GB/s
+
+  ⏱️  TOTAL TIME: 38.18737ms
+    (Alloc: 12.613µs + Launch: 155.782µs + Exec: 38.013023ms + Free: 5.952µs)
+
+═══════════════════════════════════════════════════════════
+🎯 TEST: 32 streams × 8M elements - HIGH THROUGHPUT
+═══════════════════════════════════════════════════════════
+  Concurrent streams: 32
+  Elements per stream: 8.39M
+  Total elements: 268.44M
+  Memory per stream: 100.66 MB
+  Total memory: 3.22 GB
+
+🌊 TLSF Allocation Phase...
+  ✓ Allocated 3.22 GB in 16.548µs
+    Bandwidth: 194659.50 GB/s
+
+🚀 Kernel Launch Phase...
+  ✓ Launched 192 kernels in 269.236µs
+    Launch rate: 713.13K kernels/sec
+
+⚡ GPU Execution Phase...
+  ✓ Execution complete in 37.313463ms
+
+  📊 PERFORMANCE METRICS:
+    ─────────────────────────────────────
+    Compute:      273.37 GFLOPS
+    Memory BW:    345.32 GB/s
+    Operations:   10.20B FLOPs
+    Elements:     268.44M
+    Kernels:      192
+    ─────────────────────────────────────
+
+🧹 TLSF Cleanup Phase...
+  ✓ Freed 3.22 GB in 12.155µs
+    Bandwidth: 265012.38 GB/s
+
+  ⏱️  TOTAL TIME: 37.611402ms
+    (Alloc: 16.548µs + Launch: 269.236µs + Exec: 37.313463ms + Free: 12.155µs)
+
+═══════════════════════════════════════════════════════════
+🎯 TEST: 64 streams × 4M elements - BALANCED
+═══════════════════════════════════════════════════════════
+  Concurrent streams: 64
+  Elements per stream: 4.19M
+  Total elements: 268.44M
+  Memory per stream: 50.33 MB
+  Total memory: 3.22 GB
+
+🌊 TLSF Allocation Phase...
+  ✓ Allocated 3.22 GB in 31.57µs
+    Bandwidth: 102034.38 GB/s
+
+🚀 Kernel Launch Phase...
+  ✓ Launched 384 kernels in 579.05µs
+    Launch rate: 663.16K kernels/sec
+
+⚡ GPU Execution Phase...
+  ✓ Execution complete in 37.211161ms
+
+  📊 PERFORMANCE METRICS:
+    ─────────────────────────────────────
+    Compute:      274.13 GFLOPS
+    Memory BW:    346.26 GB/s
+    Operations:   10.20B FLOPs
+    Elements:     268.44M
+    Kernels:      384
+    ─────────────────────────────────────
+
+🧹 TLSF Cleanup Phase...
+  ✓ Freed 3.22 GB in 19.697µs
+    Bandwidth: 163538.89 GB/s
+
+  ⏱️  TOTAL TIME: 37.841478ms
+    (Alloc: 31.57µs + Launch: 579.05µs + Exec: 37.211161ms + Free: 19.697µs)
+
+═══════════════════════════════════════════════════════════
+🎯 TEST: 128 streams × 2M elements - MAXIMUM SCALE
+═══════════════════════════════════════════════════════════
+  Concurrent streams: 128
+  Elements per stream: 2.10M
+  Total elements: 268.44M
+  Memory per stream: 25.17 MB
+  Total memory: 3.22 GB
+
+🌊 TLSF Allocation Phase...
+  ✓ Allocated 3.22 GB in 54.982µs
+    Bandwidth: 58586.91 GB/s
+
+🚀 Kernel Launch Phase...
+  ✓ Launched 768 kernels in 1.267202ms
+    Launch rate: 606.06K kernels/sec
+
+⚡ GPU Execution Phase...
+  ✓ Execution complete in 36.062931ms
+
+  📊 PERFORMANCE METRICS:
+    ─────────────────────────────────────
+    Compute:      282.85 GFLOPS
+    Memory BW:    357.29 GB/s
+    Operations:   10.20B FLOPs
+    Elements:     268.44M
+    Kernels:      768
+    ─────────────────────────────────────
+
+🧹 TLSF Cleanup Phase...
+  ✓ Freed 3.22 GB in 40.301µs
+    Bandwidth: 79929.17 GB/s
+
+  ⏱️  TOTAL TIME: 37.425416ms
+    (Alloc: 54.982µs + Launch: 1.267202ms + Exec: 36.062931ms + Free: 40.301µs)
+
+╔════════════════════════════════════════════════════════════╗
+║  🎉 BENCHMARK COMPLETE! 🎉                                 ║
+║                                                            ║
+║  PTX-OS TLSF delivered maximum compute throughput!        ║
+╚════════════════════════════════════════════════════════════╝
+[Ferrite-OS] Captured primary context 0x61a0f1e09bc0 for device 0
+[Ferrite-OS] Initializing GPU Hot Runtime on device 0
+[Ferrite-OS] Attached to global state (client mode)
+[Ferrite-OS] Global state mapped to GPU context
+[Ferrite-OS] Device: NVIDIA GeForce RTX 3070
+[Ferrite-OS] Compute Capability: 8.6
+[Ferrite-OS] Total VRAM: 7.68 GB
+[Ferrite-OS] Created 1024 async streams (Priority Range: 0 to -5)
+[Ferrite-OS] Pool Configuration:
+[Ferrite-OS]   Mode: 80% of available VRAM
+[Ferrite-OS]   Available VRAM: 6.55 GB (6.93 GB total, 0.38 GB reserved)
+[Ferrite-OS]   Claiming: 5.24 GB for Hot Pool
+[Ferrite-OS] VRAM pool allocated: 5.24 GB
+[Ferrite-OS] Initializing Enhanced TLSF Allocator...
+[TLSF] Allocator created: 5361.91 MB pool
+[Ferrite-OS] Enhanced TLSF allocator initialized
+[Ferrite-OS]      - O(1) allocation/deallocation
+[Ferrite-OS]      - O(1) block lookup via hash table
+[Ferrite-OS]      - Memory leak detection enabled
+[Ferrite-OS]      - Pool health monitoring active
+[Ferrite-OS] Memory allocator ready
+[Ferrite-OS] CUDA graphs initialized
+[Ferrite-OS] Runtime initialized
+
+[Ferrite-OS] Shutting down GPU Hot Runtime...
+[Ferrite-OS] Destroying enhanced TLSF allocator...
+[TLSF] Allocator destroyed
+[Ferrite-OS] Shutdown complete
+
+=== Dynamic-Shape Benchmark ===
+cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-tensor --example bench_dynamic_shapes
+    Finished `release` profile [optimized] target(s) in 0.02s
+     Running `target/release/examples/bench_dynamic_shapes`
+=== PTX-OS Dynamic-Shape Inference Benchmark ===
+requests: 1000
+batch: 1..16
+seq:   16..512
+hidden: 256
+sync every: 10
+print every: 100
+max streams: 32
+pool fraction: 0.70
+reserve VRAM: 256 MB
+
+req   100/1000 | alloc 0.00 GB | free 4.78 GB | frag 0.00% | max_alloc 4.78 GB
+req   200/1000 | alloc 0.01 GB | free 4.77 GB | frag 0.00% | max_alloc 4.77 GB
+req   300/1000 | alloc 0.00 GB | free 4.78 GB | frag 0.00% | max_alloc 4.78 GB
+req   400/1000 | alloc 0.01 GB | free 4.78 GB | frag 0.00% | max_alloc 4.78 GB
+req   500/1000 | alloc 0.00 GB | free 4.78 GB | frag 0.00% | max_alloc 4.78 GB
+req   600/1000 | alloc 0.01 GB | free 4.77 GB | frag 0.00% | max_alloc 4.77 GB
+req   700/1000 | alloc 0.01 GB | free 4.77 GB | frag 0.00% | max_alloc 4.77 GB
+req   800/1000 | alloc 0.01 GB | free 4.78 GB | frag 0.00% | max_alloc 4.78 GB
+req   900/1000 | alloc 0.00 GB | free 4.78 GB | frag 0.00% | max_alloc 4.78 GB
+req  1000/1000 | alloc 0.00 GB | free 4.78 GB | frag 0.00% | max_alloc 4.78 GB
+
+total time: 0.0427 s
+throughput: 13.428 GElem/s
+throughput: 214.850 GB/s (approx)
+final frag: 0.00% | largest free 4.78 GB
+[Ferrite-OS] Captured primary context 0x6400031f9880 for device 0
+[Ferrite-OS] Initializing GPU Hot Runtime on device 0
+[Ferrite-OS] Attached to global state (client mode)
+[Ferrite-OS] Global state mapped to GPU context
+[Ferrite-OS] Device: NVIDIA GeForce RTX 3070
+[Ferrite-OS] Compute Capability: 8.6
+[Ferrite-OS] Total VRAM: 7.68 GB
+[Ferrite-OS] Created 32 async streams (Priority Range: 0 to -5)
+[Ferrite-OS] Pool Configuration:
+[Ferrite-OS]   Mode: 70% of available VRAM
+[Ferrite-OS]   Available VRAM: 6.83 GB (7.08 GB total, 0.25 GB reserved)
+[Ferrite-OS]   Claiming: 4.78 GB for Hot Pool
+[Ferrite-OS] VRAM pool allocated: 4.78 GB
+[Ferrite-OS] Initializing Enhanced TLSF Allocator...
+[TLSF] Allocator created: 4897.55 MB pool
+[Ferrite-OS] Enhanced TLSF allocator initialized
+[Ferrite-OS]      - O(1) allocation/deallocation
+[Ferrite-OS]      - O(1) block lookup via hash table
+[Ferrite-OS]      - Memory leak detection enabled
+[Ferrite-OS]      - Pool health monitoring active
+[Ferrite-OS] Memory allocator ready
+[Ferrite-OS] CUDA graphs initialized
+[Ferrite-OS] Runtime initialized
+
+[Ferrite-OS] Shutting down GPU Hot Runtime...
+[Ferrite-OS] Destroying enhanced TLSF allocator...
+[TLSF] Allocator destroyed
+[Ferrite-OS] Shutdown complete
+
+=== Elementwise Ops Benchmark ===
+cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-tensor --example bench_ops
+   Compiling ptx-tensor v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-tensor)
+    Finished `release` profile [optimized] target(s) in 2.67s
+     Running `target/release/examples/bench_ops`
+=== PTX-OS Tensor Elementwise Benchmark ===
+elems: 1048576, iters: 200, warmup: 10
+max streams: 32
+pool fraction: 0.70
+reserve VRAM: 256 MB
+
+total time: 0.0102 s
+throughput: 41.134 GElem/s (add + relu)
+latency: 0.024 ns/element
+[Ferrite-OS] Captured primary context 0x5ecc8880f880 for device 0
+[Ferrite-OS] Initializing GPU Hot Runtime on device 0
+[Ferrite-OS] Attached to global state (client mode)
+[Ferrite-OS] Global state mapped to GPU context
+[Ferrite-OS] Device: NVIDIA GeForce RTX 3070
+[Ferrite-OS] Compute Capability: 8.6
+[Ferrite-OS] Total VRAM: 7.68 GB
+[Ferrite-OS] Created 32 async streams (Priority Range: 0 to -5)
+[Ferrite-OS] Pool Configuration:
+[Ferrite-OS]   Mode: 70% of available VRAM
+[Ferrite-OS]   Available VRAM: 6.83 GB (7.08 GB total, 0.25 GB reserved)
+[Ferrite-OS]   Claiming: 4.78 GB for Hot Pool
+[Ferrite-OS] VRAM pool allocated: 4.78 GB
+[Ferrite-OS] Initializing Enhanced TLSF Allocator...
+[TLSF] Allocator created: 4897.29 MB pool
+[Ferrite-OS] Enhanced TLSF allocator initialized
+[Ferrite-OS]      - O(1) allocation/deallocation
+[Ferrite-OS]      - O(1) block lookup via hash table
+[Ferrite-OS]      - Memory leak detection enabled
+[Ferrite-OS]      - Pool health monitoring active
+[Ferrite-OS] Memory allocator ready
+[Ferrite-OS] CUDA graphs initialized
+[Ferrite-OS] Runtime initialized
+
+[Ferrite-OS] Shutting down GPU Hot Runtime...
+[Ferrite-OS] Destroying enhanced TLSF allocator...
+[TLSF] Allocator destroyed
+[Ferrite-OS] Shutdown complete
+
+=== Matmul Benchmark ===
+cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-tensor --example bench_matmul
+   Compiling ptx-tensor v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-tensor)
+    Finished `release` profile [optimized] target(s) in 2.58s
+     Running `target/release/examples/bench_matmul`
+=== PTX-OS Matmul Benchmark ===
+shape: [1024x1024] @ [1024x1024]
+iters: 10, warmup: 2
+max streams: 32
+pool fraction: 0.70
+reserve VRAM: 256 MB
+
+total time: 0.0055 s
+throughput: 3869.63 GFLOP/s
+[Ferrite-OS] Captured primary context 0x58cdc8fe3880 for device 0
+[Ferrite-OS] Initializing GPU Hot Runtime on device 0
+[Ferrite-OS] Attached to global state (client mode)
+[Ferrite-OS] Global state mapped to GPU context
+[Ferrite-OS] Device: NVIDIA GeForce RTX 3070
+[Ferrite-OS] Compute Capability: 8.6
+[Ferrite-OS] Total VRAM: 7.68 GB
+[Ferrite-OS] Created 32 async streams (Priority Range: 0 to -5)
+[Ferrite-OS] Pool Configuration:
+[Ferrite-OS]   Mode: 70% of available VRAM
+[Ferrite-OS]   Available VRAM: 6.83 GB (7.08 GB total, 0.25 GB reserved)
+[Ferrite-OS]   Claiming: 4.78 GB for Hot Pool
+[Ferrite-OS] VRAM pool allocated: 4.78 GB
+[Ferrite-OS] Initializing Enhanced TLSF Allocator...
+[TLSF] Allocator created: 4897.73 MB pool
+[Ferrite-OS] Enhanced TLSF allocator initialized
+[Ferrite-OS]      - O(1) allocation/deallocation
+[Ferrite-OS]      - O(1) block lookup via hash table
+[Ferrite-OS]      - Memory leak detection enabled
+[Ferrite-OS]      - Pool health monitoring active
+[Ferrite-OS] Memory allocator ready
+[Ferrite-OS] CUDA graphs initialized
+[Ferrite-OS] Runtime initialized
+
+[Ferrite-OS] Shutting down GPU Hot Runtime...
+[Ferrite-OS] Destroying enhanced TLSF allocator...
+[TLSF] Allocator destroyed
+[Ferrite-OS] Shutdown complete
+
+Results saved to: benchmarks/ptx_bench_.txt

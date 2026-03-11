@@ -1,0 +1,23 @@
+[package]
+name = "ferrite-renderd"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "X11 3D render service for Ferrite-OS scene visualization"
+
+[[bin]]
+name = "ferrite-renderd"
+path = "src/main.rs"
+
+[features]
+default = []
+cuda-gl-interop = ["dep:ptx-sys", "dep:gl", "dep:x11"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+x11rb = "0.13"
+ptx-sys = { path = "../ptx-sys", optional = true }
+gl = { version = "0.14", optional = true }
+x11 = { version = "2.21", features = ["xlib", "glx"], optional = true }

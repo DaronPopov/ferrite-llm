@@ -1,0 +1,107 @@
+PTX-OS Benchmark Run
+Timestamp: Sat Feb  7 05:39:58 PST 2026
+Host: daron-ROG-Strix-G15CE-G15CE
+Workspace: /home/daron/fdfd/ferriterc/ferrite-os
+Commit: da43a5613f8640a21f03b1fda399c40a4e6d9f98
+GPU: Failed to initialize NVML: Unknown Error
+
+Environment:
+CUDA_PATH=/usr/local/cuda
+CUDA_LIB=/usr/local/cuda/lib64
+NVCC=/usr/local/cuda/bin/nvcc
+CUDA_VERSION=12.6
+
+=== Build (core + rust) ===
+cmd: /home/daron/fdfd/ferriterc/ferrite-os/scripts/ptx_build.sh all
+CUDA: /usr/local/cuda
+nvcc: NVIDIA (R) Cuda compiler driver
+GPU SM: 
+CUDA_PATH=/usr/local/cuda cargo build --release
+   Compiling ptx-runner v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-runner)
+    Finished `release` profile [optimized] target(s) in 3.36s
+
+=== Runtime Jitter Benchmark ===
+cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example jitter_benchmark
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.44
+   Compiling unicode-ident v1.0.22
+   Compiling libc v0.2.180
+   Compiling cfg-if v1.0.4
+   Compiling serde_core v1.0.228
+   Compiling once_cell v1.21.3
+   Compiling zerocopy v0.8.38
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.19
+   Compiling regex-syntax v0.8.9
+   Compiling crossbeam-utils v0.8.21
+   Compiling itoa v1.0.17
+   Compiling serde_json v1.0.149
+   Compiling smallvec v1.15.1
+   Compiling powerfmt v0.2.0
+   Compiling thiserror v2.0.18
+   Compiling lazy_static v1.5.0
+   Compiling log v0.4.29
+   Compiling memchr v2.7.6
+   Compiling parking_lot_core v0.9.12
+   Compiling ptx-sys v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-sys)
+   Compiling pin-project-lite v0.2.16
+   Compiling tracing-core v0.1.36
+   Compiling deranged v0.5.5
+   Compiling sharded-slab v0.1.7
+   Compiling thread_local v1.1.9
+   Compiling nu-ansi-term v0.50.3
+   Compiling thiserror v1.0.69
+   Compiling time-core v0.1.8
+   Compiling scopeguard v1.2.0
+   Compiling num-conv v0.2.0
+   Compiling lock_api v0.4.14
+   Compiling autocfg v1.5.0
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling tracing-log v0.2.0
+   Compiling hashbrown v0.16.1
+   Compiling equivalent v1.0.2
+   Compiling fixedbitset v0.4.2
+   Compiling crossbeam-channel v0.5.15
+   Compiling num-traits v0.2.19
+   Compiling syn v2.0.114
+   Compiling indexmap v2.13.0
+   Compiling regex-automata v0.4.14
+   Compiling getrandom v0.2.17
+   Compiling jobserver v0.1.34
+   Compiling time v0.3.47
+   Compiling rand_core v0.6.4
+   Compiling parking_lot v0.12.5
+   Compiling cc v1.2.55
+   Compiling petgraph v0.6.5
+   Compiling ptx-kernels v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-kernels)
+   Compiling tracing-serde v0.2.0
+   Compiling matchers v0.2.0
+   Compiling zerocopy-derive v0.8.38
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v2.0.18
+   Compiling thiserror-impl v1.0.69
+   Compiling tracing v0.1.44
+   Compiling tracing-subscriber v0.3.22
+   Compiling tracing-appender v0.2.4
+   Compiling ppv-lite86 v0.2.21
+   Compiling half v2.7.1
+   Compiling rand_chacha v0.3.1
+   Compiling rand v0.8.5
+   Compiling ptx-runtime v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/ptx-runtime)
+   Compiling ptx-tensor v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-tensor)
+   Compiling ptx-compute v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-compute)
+   Compiling ptx-compiler v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-compiler)
+   Compiling ptx-autograd v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-autograd)
+    Finished `release` profile [optimized] target(s) in 10.80s
+     Running `target/release/examples/jitter_benchmark`
+╔════════════════════════════════════════════════════════════╗
+║  📊 JITTER & LATENCY DISTRIBUTION BENCHMARK 📊             ║
+║                                                            ║
+║  Testing timing consistency under massive concurrency!    ║
+║  Production needs PREDICTABLE latency! ⚡                  ║
+╚════════════════════════════════════════════════════════════╝
+
+⚡ Initializing PTX-OS runtime...
+Error: InitFailed { device_id: 0 }
+[Ferrite-OS] Error: cudaSetDevice(0) failed: OS call failed or operation not supported on this OS

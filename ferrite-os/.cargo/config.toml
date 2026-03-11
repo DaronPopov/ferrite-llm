@@ -1,0 +1,38 @@
+# Ferrite-OS Cargo Configuration
+#
+# This file configures the build system to automatically find shared libraries
+# without requiring LD_LIBRARY_PATH to be set manually.
+
+[build]
+# Set rpath to find libptx_os.so in the lib/ directory
+rustflags = [
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../../../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/lib",
+]
+
+[target.x86_64-unknown-linux-gnu]
+# Ensure we link against our custom libraries
+rustflags = [
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../../../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/lib",
+    "-L", "native=lib",
+]
+
+[target.aarch64-unknown-linux-gnu]
+# ARM64 configuration (Jetson, ARM servers)
+rustflags = [
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../../../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/../lib",
+    "-C", "link-arg=-Wl,-rpath,$ORIGIN/lib",
+    "-L", "native=lib",
+]
+
+# Environment variables for cargo run
+[env]
+# Fallback in case rpath doesn't work
+LD_LIBRARY_PATH = { value = "lib:${LD_LIBRARY_PATH}", force = false, relative = true }

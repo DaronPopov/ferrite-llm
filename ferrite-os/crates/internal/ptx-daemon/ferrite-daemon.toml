@@ -1,0 +1,88 @@
+# Ferrite-OS Daemon Configuration
+#
+# This file configures the Ferrite-OS GPU runtime daemon.
+# Copy to /etc/ferrite-os/daemon.toml or ~/.config/ferrite-os/daemon.toml
+
+# GPU device ID (default: 0)
+device_id = 0
+
+# Unix socket path for IPC
+# Default: /var/run/ferrite-os/daemon_{uid}.sock
+socket_path = "/var/run/ferrite-os/daemon.sock"
+
+# PID file location
+# Default: /var/run/ferrite-os/daemon_{uid}.pid
+pid_file = "/var/run/ferrite-os/daemon.pid"
+
+# Maximum concurrent client connections (default: 32)
+max_clients = 32
+
+# Maximum CUDA streams (default: 128)
+# Increase for higher parallelism (e.g., 256, 512, 1024)
+max_streams = 128
+
+# VRAM pool fraction (0.0 to 1.0, default: 0.25)
+# Fraction of available VRAM to use for memory pool
+pool_fraction = 0.25
+
+# Prefer Orin-specific unified-memory persistent scheduler path (default: false)
+prefer_orin_unified_memory = false
+
+# Use managed-memory TLSF backing pool (default: false; auto-enabled on embedded integrated GPUs)
+use_managed_pool = false
+
+# Keepalive interval in milliseconds (default: 5000)
+# How often to send keepalive signal to GPU kernel
+keepalive_ms = 5000
+
+# Watch metrics interval in milliseconds (default: 1000)
+# Interval for watch mode updates
+watch_ms = 1000
+
+# Enable watch mode (default: false)
+# Display live metrics when daemon starts
+watch_enabled = false
+
+# Enable memory leak detection (default: false)
+# Adds overhead, use only for debugging
+enable_leak_detection = false
+
+# Boot persistent kernel on startup (default: false)
+# Experimental: keeps GPU kernel resident
+boot_kernel = false
+
+# Log directory (default: none - logs to stdout)
+# If specified, logs written to rolling daily files
+log_dir = "/var/log/ferrite-os"
+
+# Client timeout in seconds (default: 30)
+# Maximum time to wait for client requests
+client_timeout_secs = 30
+
+# Directory to watch for .fer script files (default: none)
+# When set, .fer files created/modified in this directory are auto-compiled and executed
+# script_watch_dir = "/home/user/ferrite-scripts"
+
+# Skip TUI dashboard, run original headless behavior (default: false)
+# Also auto-enabled when stdout is not a TTY
+headless = false
+
+# GPU device name for TUI header display (default: "GPU {id}")
+# Set via FERRITE_GPU_NAME env var or nvidia-smi
+# gpu_name = "RTX 3070"
+
+# ─── Scheduler ───
+[scheduler]
+# policy = "fair-share"
+# max_queued_jobs = 4096
+
+# ─── Control Plane ───
+[control_plane]
+# audit_max_entries = 10000
+# default_policy = "permissive"
+# enable_scheduler_tui = true
+
+# ─── Jobs ───
+[jobs]
+# default_restart_policy = "never"
+# max_retries = 3

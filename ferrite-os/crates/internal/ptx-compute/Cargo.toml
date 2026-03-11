@@ -1,0 +1,14 @@
+[package]
+name = "ptx-compute"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "High-level compute operations for PTX-OS GPU runtime"
+
+[dependencies]
+ptx-runtime = { workspace = true }
+ptx-sys = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]

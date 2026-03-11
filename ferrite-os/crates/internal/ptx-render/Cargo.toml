@@ -1,0 +1,12 @@
+[package]
+name = "ptx-render"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "GPU render stack for Ferrite-OS — hierarchical kernel pipeline over TLSF allocator"
+
+[dependencies]
+ptx-sys = { workspace = true }
+ptx-runtime = { workspace = true }
+libc = { workspace = true }

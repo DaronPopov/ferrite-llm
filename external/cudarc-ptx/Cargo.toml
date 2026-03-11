@@ -1,0 +1,98 @@
+[package]
+name = "cudarc"
+version = "0.13.9"
+edition = "2021"
+authors = ["Daron Popov <daron@ferrite.ai>", "Corey Lowman <coreylowman@gmail.com>"]
+description = "cudarc fork with PTX-OS TLSF allocator integration for O(1) GPU memory allocation"
+homepage = "https://github.com/DaronPopov/ferrite-os"
+documentation = "https://docs.rs/cudarc-ptx"
+readme = "README-PTX.md"
+keywords = ["cuda", "nvidia", "gpu", "tlsf", "allocator"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/DaronPopov/ferrite-os"
+build = "build.rs"
+
+[package.metadata.docs.rs]
+features = ["cuda-12080", "f16", "cudnn"]
+
+[lib]
+name = "cudarc"
+path = "src/lib.rs"
+
+[dependencies]
+libloading = "0.8.5"
+half = { version = "2.4.1", features = ["num-traits", "rand_distr"], optional = true, default-features = false }
+no-std-compat = { version = "0.4.1", features = ["alloc"], optional = true }
+spin = { version = "0.9.8", features = ["rwlock"], optional = true, default-features = false }
+
+# PTX-OS Integration
+ptx-runtime = { path = "../../ferrite-os/crates/public/ptx-runtime", optional = true }
+ptx-sys = { path = "../../ferrite-os/crates/internal/ptx-sys", optional = true }
+
+[features]
+default = ["std", "cublas", "cublaslt", "curand", "driver", "runtime", "nvrtc"]
+std = []
+driver = ["nvrtc"]
+nvrtc = []
+runtime = ["driver"]
+cublas = ["driver"]
+cublaslt = ["driver"]
+curand = ["driver"]
+cudnn = ["driver"]
+nccl = ["driver"]
+f16 = ["dep:half"]
+no-std = ["no-std-compat/std", "dep:spin"]
+dynamic-linking = []
+
+# PTX-OS TLSF allocator (THE KEY FEATURE)
+ptx-alloc = ["dep:ptx-runtime", "dep:ptx-sys"]
+
+# CUDA version features
+cuda-version-from-build-system = []
+cuda-11040 = []
+cuda-11050 = []
+cuda-11060 = []
+cuda-11070 = []
+cuda-11080 = []
+cuda-12000 = []
+cuda-12010 = []
+cuda-12020 = []
+cuda-12030 = []
+cuda-12040 = []
+cuda-12050 = []
+cuda-12060 = []
+cuda-12080 = []
+cuda-12090 = []
+cuda-13000 = []
+
+[[example]]
+name = "01-allocate"
+path = "examples/01-allocate.rs"
+
+[[example]]
+name = "02-copy"
+path = "examples/02-copy.rs"
+
+[[example]]
+name = "03-launch-kernel"
+path = "examples/03-launch-kernel.rs"
+
+[[example]]
+name = "04-streams"
+path = "examples/04-streams.rs"
+
+[[example]]
+name = "05-device-repr"
+path = "examples/05-device-repr.rs"
+
+[[example]]
+name = "06-threading"
+path = "examples/06-threading.rs"
+
+[[example]]
+name = "matmul-kernel"
+path = "examples/matmul-kernel.rs"
+
+[[example]]
+name = "nvrtc-compile"
+path = "examples/nvrtc-compile.rs"

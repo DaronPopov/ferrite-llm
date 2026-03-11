@@ -1,0 +1,63 @@
+#!/bin/bash
+# ferrite-run — Launch any binary under the PTX-OS hook system.
+#
+# Automatically sets LD_PRELOAD and LD_LIBRARY_PATH so the TLSF allocator
+# intercepts all CUDA memory and context calls.  No manual env vars needed.
+#
+# Usage:
+#   scripts/ferrite-run ./my_cuda_app [args...]
+#   scripts/ferrite-run python train.py
+#   PTX_HOOK_VERBOSE=1 scripts/ferrite-run ./test_hook
+#
+# Environment (optional — all have sane defaults):
+#   PTX_HOOK_VERBOSE=1              Print every alloc/free/ctx call
+#   PTX_HOOK_MODE=tlsf|cuda|hybrid  Allocator mode (default: tlsf)
+#   PTX_POOL_SIZE=4G                Fixed pool size
+#   PTX_POOL_FRACTION=0.80          Pool as fraction of free VRAM
+#   PTX_CONTEXT_HOOK_WARN_ONLY=1    Log but don't block context calls
+
+set -euo pipefail
+
+# Resolve repo root (this script lives in ferrite-os/tooling/scripts/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FERRITE_OS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+LIB_DIR="$FERRITE_OS_DIR/lib"
+
+HOOK_LIB="$LIB_DIR/libptx_hook.so"
+RUNTIME_LIB="$LIB_DIR/libptx_os.so"
+
+# Verify libraries exist
+if [ ! -f "$HOOK_LIB" ]; then
+    echo "[ferrite-run] ERROR: $HOOK_LIB not found. Run 'make' first." >&2
+    exit 1
+fi
+if [ ! -f "$RUNTIME_LIB" ]; then
+    echo "[ferrite-run] ERROR: $RUNTIME_LIB not found. Run 'make' first." >&2
+    exit 1
+fi
+
+if [ $# -eq 0 ]; then
+    echo "Usage: ferrite-run <command> [args...]" >&2
+    echo "" >&2
+    echo "Examples:" >&2
+    echo "  scripts/ferrite-run ./my_cuda_app" >&2
+    echo "  scripts/ferrite-run python train.py" >&2
+    echo "  PTX_HOOK_VERBOSE=1 scripts/ferrite-run ./test" >&2
+    exit 1
+fi
+
+# Build LD_LIBRARY_PATH with our lib dir first
+if [ -n "${LD_LIBRARY_PATH:-}" ]; then
+    export LD_LIBRARY_PATH="$LIB_DIR:$LD_LIBRARY_PATH"
+else
+    export LD_LIBRARY_PATH="$LIB_DIR"
+fi
+
+# Set LD_PRELOAD (append to existing if any)
+if [ -n "${LD_PRELOAD:-}" ]; then
+    export LD_PRELOAD="$HOOK_LIB:$LD_PRELOAD"
+else
+    export LD_PRELOAD="$HOOK_LIB"
+fi
+
+exec "$@"

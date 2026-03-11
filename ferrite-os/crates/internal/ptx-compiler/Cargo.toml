@@ -1,0 +1,18 @@
+[package]
+name = "ptx-compiler"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Graph compiler for PTX-OS tensor computations"
+
+[dependencies]
+ptx-sys = { workspace = true }
+ptx-runtime = { workspace = true }
+ptx-tensor = { workspace = true }
+libc = { workspace = true }
+thiserror = { workspace = true }
+parking_lot = { workspace = true }
+smallvec = { workspace = true }
+indexmap = { workspace = true }
+petgraph = { workspace = true }

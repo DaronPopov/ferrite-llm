@@ -1,0 +1,58 @@
+[package]
+name = "ferrite-apps"
+version = "0.1.0"
+edition = "2021"
+authors = ["PTX-OS Team"]
+license = "MIT OR Apache-2.0"
+description = "Long-running persistent GPU OS applications for PTX-OS"
+
+[dependencies]
+ptx-runtime = { path = "../ptx-runtime" }
+ptx-sys = { path = "../../internal/ptx-sys" }
+anyhow = "1.0"
+libc = "0.2"
+rand = "0.8"
+
+[[bin]]
+name = "vram_database"
+path = "src/bin/vram_database.rs"
+
+[[bin]]
+name = "neural_fabric"
+path = "src/bin/neural_fabric.rs"
+
+[[bin]]
+name = "stream_compute"
+path = "src/bin/stream_compute.rs"
+
+[[bin]]
+name = "checkpoint_engine"
+path = "src/bin/checkpoint_engine.rs"
+
+[[bin]]
+name = "gpu_nas"
+path = "src/bin/gpu_nas.rs"
+
+[[bin]]
+name = "gpu_logwatch"
+path = "src/bin/gpu_logwatch.rs"
+
+[[bin]]
+name = "dataflow_proof"
+path = "src/bin/dataflow_proof.rs"
+
+[[bin]]
+name = "ascii_tensor_orbit"
+path = "src/bin/ascii_tensor_orbit.rs"
+
+[[bin]]
+name = "gpu_heartbeat_journal"
+path = "src/bin/gpu_heartbeat_journal.rs"
+
+[[bin]]
+name = "memory_churn_guard"
+path = "src/bin/memory_churn_guard.rs"
+
+[[bin]]
+name = "ipc_ring_pipeline"
+path = "src/bin/ipc_ring_pipeline.rs"

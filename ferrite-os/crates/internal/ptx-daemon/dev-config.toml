@@ -1,0 +1,29 @@
+# Development Configuration for Ferrite-OS Daemon
+# Uses /tmp for socket and PID file (no root required)
+
+device_id = 0
+socket_path = "/tmp/ferrite-daemon.sock"
+pid_file = "/tmp/ferrite-daemon.pid"
+max_clients = 32
+max_streams = 128
+pool_fraction = 0.25
+prefer_orin_unified_memory = false
+use_managed_pool = false
+keepalive_ms = 5000
+watch_ms = 1000
+watch_enabled = true
+enable_leak_detection = false
+boot_kernel = false
+client_timeout_secs = 30
+
+# Log to stdout in development
+# log_dir = "/tmp/ferrite-logs"
+
+# Watch for .fer scripts in /tmp/ferrite-scripts
+# script_watch_dir = "/tmp/ferrite-scripts"
+
+# TUI is enabled by default (auto-detects TTY)
+# headless = false
+
+# TUI theme: "default" or "high-contrast" (or set FERRITE_THEME env var)
+# theme = "default"

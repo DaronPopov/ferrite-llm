@@ -1,0 +1,1 @@
+{"schema_version":1,"compiler_fingerprint":5169785065316197999,"program":{"nodes":[{"op":{"Input":{"shape":[1,1,1,8192]}}},{"op":{"Relu":0}},{"op":{"Add":{"lhs":1,"rhs":0}}},{"op":{"FusedSigmoidAdd":{"lhs":1,"rhs":0}}}],"shapes":[[1,1,1,8192],[1,1,1,8192],[1,1,1,8192],[1,1,1,8192]],"numels":[8192,8192,8192,8192],"input_ids":[0],"output":3}}

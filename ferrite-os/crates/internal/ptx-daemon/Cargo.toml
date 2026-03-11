@@ -1,0 +1,36 @@
+[package]
+name = "ferrite-daemon"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Persistent Ferrite-OS runtime daemon"
+default-run = "ferrite-daemon"
+
+[[bin]]
+name = "ferrite-daemon"
+path = "src/main.rs"
+
+[[bin]]
+name = "ferrite"
+path = "src/bin/ferrite.rs"
+
+[dependencies]
+ptx-runtime = { workspace = true }
+ptx-sys = { workspace = true }
+ferrite-platform = { workspace = true }
+libc = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+tracing-appender = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+parking_lot = { workspace = true }
+signal-hook = "0.3"
+ferrite-gpu-lang = { path = "../../../../ferrite-gpu-lang" }
+ratatui = "0.29"
+crossterm = "0.28"
+tachyonfx = "0.11.1"
+rhai = "1.20"
+ptx-runner = { path = "../ptx-runner" }
