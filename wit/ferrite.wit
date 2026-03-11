@@ -23,6 +23,16 @@ interface inference {
         /// Stream tokens one at a time (returns list for prototype)
         /// In future: use WASI stream interface
         generate-stream: func(prompt: string, config: generation-config) -> result<list<string>, string>;
+
+        /// Start a polling-based streamed generation session.
+        start-generate-stream: func(prompt: string, config: generation-config) -> result<generation, string>;
+    }
+
+    /// Polling generation handle for real-time output across the WASM boundary.
+    resource generation {
+        /// Get the next streamed chunk.
+        /// Returns `none` when generation is complete.
+        next-chunk: func() -> result<option<string>, string>;
     }
 
     /// Load a model by name with optional authentication token

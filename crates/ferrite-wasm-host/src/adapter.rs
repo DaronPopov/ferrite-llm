@@ -7,8 +7,14 @@ use crate::bindings::WitGenConfig;
 use ferrite_core::registry::{
     ChatTemplate, DownloadedModel, ModelFamily, ModelLoader, ModelSpec,
 };
-use std::path::PathBuf;
-use std::sync::Arc;
+use mistralrs::{
+    ChatCompletionChunkResponse, ChunkChoice, Delta, GgufModelBuilder, RequestBuilder,
+    Response as MistralResponse, TextMessageRole, Usage,
+};
+use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
+use std::sync::{mpsc, Arc, Mutex};
+
 /// Convert WIT GenerationConfig to ferrite's GenerationConfig
 pub fn wit_to_ferrite_config(wit_config: &WitGenConfig) -> ferrite_core::GenerationConfig {
     ferrite_core::GenerationConfig {
@@ -166,6 +172,308 @@ impl ferrite_core::InferenceModel for DynamicModel {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum BackendKind {
+    Candle,
+    MistralRs,
+}
+
+impl BackendKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Candle => "candle",
+            Self::MistralRs => "mistralrs",
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct ChatTurn {
+    role: TextMessageRole,
+    content: String,
+}
+
+struct MistralRsSession {
+    model: Arc<Mutex<mistralrs::Model>>,
+    runtime: Arc<tokio::runtime::Runtime>,
+    history: Arc<Mutex<Vec<ChatTurn>>>,
+}
+
+impl MistralRsSession {
+    fn new(downloaded: &DownloadedModel, force_cpu: bool) -> Result<Self, String> {
+        let model_root = downloaded
+            .weights_path
+            .parent()
+            .unwrap_or(&downloaded.weights_path)
+            .to_string_lossy()
+            .to_string();
+        let model_file = downloaded
+            .weights_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| "Model weights path is missing a file name".to_string())?
+            .to_string();
+        let tokenizer_json = downloaded.tokenizer_path.join("tokenizer.json");
+        if !tokenizer_json.exists() {
+            return Err(format!(
+                "mistralrs backend requires tokenizer.json, missing at {}",
+                tokenizer_json.display()
+            ));
+        }
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("Failed to create Tokio runtime: {e}"))?;
+
+        let mut builder = GgufModelBuilder::new(model_root, vec![model_file])
+            .with_tokenizer_json(tokenizer_json.display().to_string())
+            .with_logging();
+
+        let tokenizer_config = downloaded.tokenizer_path.join("tokenizer_config.json");
+        if tokenizer_config.exists() {
+            builder = builder.with_chat_template(tokenizer_config.display().to_string());
+        }
+        if force_cpu {
+            builder = builder.with_force_cpu();
+        }
+
+        let model = runtime
+            .block_on(builder.build())
+            .map_err(|e| format!("mistralrs model load failed: {e}"))?;
+
+        Ok(Self {
+            model: Arc::new(Mutex::new(model)),
+            runtime: Arc::new(runtime),
+            history: Arc::new(Mutex::new(vec![ChatTurn {
+                role: TextMessageRole::System,
+                content: "You are a helpful AI assistant.".to_string(),
+            }])),
+        })
+    }
+
+    fn request_from_turns(
+        turns: &[ChatTurn],
+        config: &ferrite_core::GenerationConfig,
+    ) -> RequestBuilder {
+        let mut request = RequestBuilder::new();
+        for turn in turns {
+            request = request.add_message(turn.role.clone(), &turn.content);
+        }
+
+        request
+            .set_sampler_max_len(config.max_tokens)
+            .set_sampler_temperature(config.temperature)
+            .set_sampler_topp(config.top_p)
+            .set_sampler_topk(config.top_k)
+            .set_sampler_minp(config.min_p as f64)
+            .with_truncate_sequence(true)
+    }
+
+    fn generate(
+        &mut self,
+        prompt: &str,
+        config: &ferrite_core::GenerationConfig,
+    ) -> Result<String, String> {
+        let mut turns = self
+            .history
+            .lock()
+            .map_err(|_| "mistralrs history lock poisoned".to_string())?
+            .clone();
+        turns.push(ChatTurn {
+            role: TextMessageRole::User,
+            content: prompt.to_string(),
+        });
+        let request = Self::request_from_turns(&turns, config);
+
+        let response = match self.runtime.block_on(
+            self.model
+                .lock()
+                .map_err(|_| "mistralrs model lock poisoned".to_string())?
+                .send_chat_request(request),
+        ) {
+            Ok(response) => response,
+            Err(err) => return Err(format!("mistralrs generation failed: {err}")),
+        };
+
+        let content = response
+            .choices
+            .first()
+            .and_then(|choice| choice.message.content.clone())
+            .ok_or_else(|| "mistralrs returned no assistant content".to_string())?;
+
+        print!("{content}");
+        print_usage_stats(response.usage);
+
+        let mut history = self
+            .history
+            .lock()
+            .map_err(|_| "mistralrs history lock poisoned".to_string())?;
+        history.push(ChatTurn {
+            role: TextMessageRole::User,
+            content: prompt.to_string(),
+        });
+        history.push(ChatTurn {
+            role: TextMessageRole::Assistant,
+            content: content.clone(),
+        });
+
+        Ok(content)
+    }
+
+    fn start_generate_stream(
+        &mut self,
+        prompt: &str,
+        config: &ferrite_core::GenerationConfig,
+    ) -> Result<ActiveGeneration, String> {
+        let mut turns = self
+            .history
+            .lock()
+            .map_err(|_| "mistralrs history lock poisoned".to_string())?
+            .clone();
+        turns.push(ChatTurn {
+            role: TextMessageRole::User,
+            content: prompt.to_string(),
+        });
+        let request = Self::request_from_turns(&turns, config);
+        let (tx, rx) = mpsc::channel();
+        let runtime = Arc::clone(&self.runtime);
+        let model = Arc::clone(&self.model);
+        let history = Arc::clone(&self.history);
+        let prompt_text = prompt.to_string();
+
+        std::thread::spawn(move || {
+            let mut response_text = String::new();
+            let send_result: Result<(), String> = (|| {
+                let model_guard = model
+                    .lock()
+                    .map_err(|_| "mistralrs model lock poisoned".to_string())?;
+                let mut stream = runtime
+                    .block_on(model_guard.stream_chat_request(request))
+                    .map_err(|e| format!("mistralrs streaming generation failed: {e}"))?;
+
+                loop {
+                    let next = runtime.block_on(stream.next());
+                    let Some(response) = next else {
+                        break;
+                    };
+
+                    match response {
+                        MistralResponse::Chunk(ChatCompletionChunkResponse { choices, .. }) => {
+                            if let Some(ChunkChoice {
+                                delta:
+                                    Delta {
+                                        content: Some(content),
+                                        ..
+                                    },
+                                ..
+                            }) = choices.first()
+                            {
+                                response_text.push_str(content);
+                                tx.send(StreamEvent::Chunk(content.clone())).ok();
+                            }
+                        }
+                        MistralResponse::ModelError(message, _) => {
+                            return Err(message);
+                        }
+                        MistralResponse::CompletionDone(response) => {
+                            if response_text.is_empty() {
+                                if let Some(choice) = response.choices.first() {
+                                    response_text = choice.text.clone();
+                                }
+                            }
+                            tx.send(StreamEvent::Stats(response.usage.avg_compl_tok_per_sec))
+                                .ok();
+                        }
+                        _ => {}
+                    }
+                }
+
+                Ok(())
+            })();
+
+            match send_result {
+                Ok(()) => {
+                    if let Ok(mut turns) = history.lock() {
+                        turns.push(ChatTurn {
+                            role: TextMessageRole::User,
+                            content: prompt_text,
+                        });
+                        turns.push(ChatTurn {
+                            role: TextMessageRole::Assistant,
+                            content: response_text,
+                        });
+                    }
+                    tx.send(StreamEvent::Done).ok();
+                }
+                Err(err) => {
+                    tx.send(StreamEvent::Error(err)).ok();
+                }
+            }
+        });
+
+        Ok(ActiveGeneration::MistralRs(MistralRsActiveGeneration { rx }))
+    }
+}
+
+fn print_usage_stats(usage: Usage) {
+    println!("\n[Stats] {:.1} tok/s", usage.avg_compl_tok_per_sec);
+}
+
+enum StreamEvent {
+    Chunk(String),
+    Stats(f32),
+    Done,
+    Error(String),
+}
+
+pub(crate) struct MistralRsActiveGeneration {
+    rx: mpsc::Receiver<StreamEvent>,
+}
+
+impl MistralRsActiveGeneration {
+    fn next_chunk(&mut self) -> Result<Option<String>, String> {
+        match self.rx.recv() {
+            Ok(StreamEvent::Chunk(chunk)) => Ok(Some(chunk)),
+            Ok(StreamEvent::Stats(tps)) => Ok(Some(format!("\n[Stats] {:.1} tok/s\n", tps))),
+            Ok(StreamEvent::Done) => Ok(None),
+            Ok(StreamEvent::Error(err)) => Err(err),
+            Err(_) => Ok(None),
+        }
+    }
+}
+
+pub(crate) enum BufferedGeneration {
+    Chunks(VecDeque<String>),
+}
+
+impl BufferedGeneration {
+    fn next_chunk(&mut self) -> Option<String> {
+        match self {
+            Self::Chunks(chunks) => chunks.pop_front(),
+        }
+    }
+}
+
+pub(crate) enum ActiveGeneration {
+    Buffered(BufferedGeneration),
+    MistralRs(MistralRsActiveGeneration),
+}
+
+impl ActiveGeneration {
+    pub fn next_chunk(&mut self) -> Result<Option<String>, String> {
+        match self {
+            Self::Buffered(buffered) => Ok(buffered.next_chunk()),
+            Self::MistralRs(stream) => stream.next_chunk(),
+        }
+    }
+}
+
+enum BackendSession {
+    Candle(ferrite_core::ChatSession<DynamicModel>),
+    MistralRs(MistralRsSession),
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // MODEL ADAPTER (uses registry)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -174,16 +482,21 @@ impl ferrite_core::InferenceModel for DynamicModel {
 pub struct ModelAdapter {
     pub name: String,
     pub spec: ModelSpec,
-    session: ferrite_core::ChatSession<DynamicModel>,
+    tokenizer: Arc<ferrite_core::Tokenizer>,
+    session: BackendSession,
 }
 
 impl ModelAdapter {
     /// Create a new model adapter using the registry
-    pub fn new(model_name: String, auth_token: Option<String>) -> Result<Self, String> {
+    pub fn new(
+        model_name: String,
+        model_cache: PathBuf,
+        auth_token: Option<String>,
+    ) -> Result<Self, String> {
         tracing::info!("🔄 Initializing model: {}", model_name);
 
         // Create model loader with auth
-        let loader = ModelLoader::new("./models")
+        let loader = ModelLoader::new(&model_cache)
             .with_auth(auth_token.clone());
 
         // Look up model in catalog
@@ -216,10 +529,14 @@ impl ModelAdapter {
     }
 
     /// Load a GGUF file directly with auto-detection
-    pub fn from_gguf(path: &std::path::Path, auth_token: Option<String>) -> Result<Self, String> {
+    pub fn from_gguf(
+        path: &Path,
+        model_cache: PathBuf,
+        auth_token: Option<String>,
+    ) -> Result<Self, String> {
         tracing::info!("🔄 Auto-loading GGUF: {}", path.display());
 
-        let loader = ModelLoader::new("./models")
+        let loader = ModelLoader::new(&model_cache)
             .with_auth(auth_token.clone());
 
         let downloaded = loader.load_gguf_auto(path)
@@ -234,35 +551,40 @@ impl ModelAdapter {
     fn load_from_downloaded(downloaded: DownloadedModel, auth_token: Option<String>) -> Result<Self, String> {
         let device = Device::cuda_if_available(0)
             .map_err(|e| format!("Device error: {}", e))?;
+        let require_cuda = std::env::var("FERRITE_REQUIRE_CUDA")
+            .map(|value| value != "0")
+            .unwrap_or(false);
 
+        let backend_kind = Self::select_backend(&downloaded);
+        let device_name = match &device {
+            Device::Cuda(_) => "cuda",
+            Device::Cpu => "cpu",
+            _ => "other",
+        };
+
+        match &device {
+            Device::Cuda(_) => tracing::info!("Using CUDA device 0 for model execution"),
+            Device::Cpu if require_cuda => {
+                return Err(
+                    "CUDA device unavailable or ferrite was built without the `cuda` feature".into(),
+                );
+            }
+            Device::Cpu => tracing::warn!(
+                "CUDA unavailable; falling back to CPU execution. Set FERRITE_REQUIRE_CUDA=1 to fail instead."
+            ),
+            _ => {}
+        }
+
+        tracing::info!(
+            "Ferrite backend selection: backend={} device={} model={}",
+            backend_kind.as_str(),
+            device_name,
+            downloaded.spec.name
+        );
         tracing::info!("🖥️  Device: {:?}", device);
 
         // Load the model based on family
-        tracing::info!("🧠 Loading {:?} model...", downloaded.family());
-
-        let model: DynamicModel = match downloaded.family() {
-            ModelFamily::Llama => {
-                let m = QuantizedLlama::new(&downloaded.weights_path, device)
-                    .map_err(|e| format!("Model load failed: {}", e))?;
-                DynamicModel::Llama(m)
-            }
-            ModelFamily::Phi => {
-                let m = QuantizedPhi::new(&downloaded.weights_path, device)
-                    .map_err(|e| format!("Model load failed: {}", e))?;
-                DynamicModel::Phi(m)
-            }
-            ModelFamily::Gemma => {
-                // Gemma uses Llama-compatible GGUF loader
-                let m = QuantizedLlama::new(&downloaded.weights_path, device)
-                    .map_err(|e| format!("Model load failed: {}", e))?;
-                DynamicModel::Llama(m)
-            }
-            _ => {
-                return Err(format!("Architecture {:?} not yet implemented", downloaded.family()));
-            }
-        };
-
-        tracing::info!("✓ Model loaded!");
+        tracing::info!("🧠 Loading {:?} model with {:?} backend...", downloaded.family(), backend_kind);
 
         // Load tokenizer
         tracing::info!("🔤 Loading tokenizer...");
@@ -274,21 +596,73 @@ impl ModelAdapter {
         // Create session config based on chat template
         let config = Self::create_session_config(&downloaded.spec);
 
-        let session = ferrite_core::ChatSession::new(
-            model,
-            Arc::new(tokenizer),
-            Some("You are a helpful AI assistant."),
-            config,
-        )
-        .map_err(|e| format!("Session creation failed: {}", e))?;
+        let tokenizer = Arc::new(tokenizer);
+        let force_cpu = matches!(device, Device::Cpu);
+
+        let session = match backend_kind {
+            BackendKind::Candle => {
+                let model: DynamicModel = match downloaded.family() {
+                    ModelFamily::Llama => {
+                        let m = QuantizedLlama::new(&downloaded.weights_path, device)
+                            .map_err(|e| format!("Model load failed: {}", e))?;
+                        DynamicModel::Llama(m)
+                    }
+                    ModelFamily::Phi => {
+                        let m = QuantizedPhi::new(&downloaded.weights_path, device)
+                            .map_err(|e| format!("Model load failed: {}", e))?;
+                        DynamicModel::Phi(m)
+                    }
+                    ModelFamily::Gemma => {
+                        let m = QuantizedLlama::new(&downloaded.weights_path, device)
+                            .map_err(|e| format!("Model load failed: {}", e))?;
+                        DynamicModel::Llama(m)
+                    }
+                    _ => {
+                        return Err(format!("Architecture {:?} not yet implemented", downloaded.family()));
+                    }
+                };
+
+                BackendSession::Candle(
+                    ferrite_core::ChatSession::new(
+                        model,
+                        Arc::clone(&tokenizer),
+                        Some("You are a helpful AI assistant."),
+                        config,
+                    )
+                    .map_err(|e| format!("Session creation failed: {}", e))?,
+                )
+            }
+            BackendKind::MistralRs => BackendSession::MistralRs(
+                MistralRsSession::new(&downloaded, force_cpu)?,
+            ),
+        };
 
         tracing::info!("✅ Ready for inference!");
 
         Ok(Self {
             name: downloaded.spec.name.clone(),
             spec: downloaded.spec,
+            tokenizer,
             session,
         })
+    }
+
+    fn select_backend(downloaded: &DownloadedModel) -> BackendKind {
+        let backend_env = std::env::var("FERRITE_BACKEND")
+            .ok()
+            .or_else(|| std::env::var("FERRITE_INFERENCE_BACKEND").ok());
+
+        match backend_env {
+            Some(value) if value.eq_ignore_ascii_case("mistralrs") => BackendKind::MistralRs,
+            Some(value) if value.eq_ignore_ascii_case("candle") => BackendKind::Candle,
+            _ => {
+                if downloaded.spec.family == ModelFamily::Llama {
+                    BackendKind::MistralRs
+                } else {
+                    BackendKind::Candle
+                }
+            }
+        }
     }
 
     /// Create session config from model spec
@@ -350,12 +724,20 @@ impl ModelAdapter {
     }
 
     /// Generate text from a prompt
-    pub fn generate(&mut self, prompt: &str, _config: &ferrite_core::GenerationConfig) -> Result<String, String> {
+    pub fn generate(
+        &mut self,
+        prompt: &str,
+        config: &ferrite_core::GenerationConfig,
+    ) -> Result<String, String> {
         tracing::debug!("🤖 Generating for: {}", prompt);
-
-        match self.session.user_turn(prompt) {
-            Ok(response) => Ok(response),
-            Err(e) => Err(format!("Generation failed: {}", e)),
+        match &mut self.session {
+            BackendSession::Candle(session) => {
+                session.set_generation_config(config.clone());
+                session
+                    .user_turn(prompt)
+                    .map_err(|e| format!("Generation failed: {}", e))
+            }
+            BackendSession::MistralRs(session) => session.generate(prompt, config),
         }
     }
 
@@ -363,42 +745,100 @@ impl ModelAdapter {
     pub fn generate_stream(&mut self, prompt: &str, config: &ferrite_core::GenerationConfig)
         -> Result<Vec<String>, String>
     {
-        // For prototype, call generate and split into words
-        let response = self.generate(prompt, config)?;
-        let tokens: Vec<String> = response
-            .split_whitespace()
-            .map(|s| s.to_string() + " ")
-            .collect();
-        Ok(tokens)
+        match &mut self.session {
+            BackendSession::Candle(session) => {
+                session.set_generation_config(config.clone());
+
+                let mut stream = session
+                    .user_turn_streaming(prompt)
+                    .map_err(|e| format!("Streaming generation failed: {}", e))?;
+
+                let mut chunks = Vec::new();
+                while let Some(chunk) = stream
+                    .next_chunk()
+                    .map_err(|e| format!("Streaming generation failed: {}", e))?
+                {
+                    if !chunk.is_empty() {
+                        chunks.push(chunk);
+                    }
+                }
+
+                Ok(chunks)
+            }
+            BackendSession::MistralRs(session) => {
+                let mut active = session.start_generate_stream(prompt, config)?;
+                let mut chunks = Vec::new();
+                while let Some(chunk) = active.next_chunk()? {
+                    chunks.push(chunk);
+                }
+                Ok(chunks)
+            }
+        }
+    }
+
+    pub(crate) fn start_generate_stream(
+        &mut self,
+        prompt: &str,
+        config: &ferrite_core::GenerationConfig,
+    ) -> Result<ActiveGeneration, String> {
+        match &mut self.session {
+            BackendSession::Candle(session) => {
+                session.set_generation_config(config.clone());
+                let mut stream = session
+                    .user_turn_streaming(prompt)
+                    .map_err(|e| format!("Streaming generation failed: {}", e))?;
+                let mut chunks = VecDeque::new();
+                while let Some(chunk) = stream
+                    .next_chunk()
+                    .map_err(|e| format!("Streaming generation failed: {}", e))?
+                {
+                    if !chunk.is_empty() {
+                        chunks.push_back(chunk);
+                    }
+                }
+                Ok(ActiveGeneration::Buffered(BufferedGeneration::Chunks(chunks)))
+            }
+            BackendSession::MistralRs(session) => session.start_generate_stream(prompt, config),
+        }
     }
 
     /// List all available models
-    pub fn list_available() -> Vec<ferrite_core::ModelInfo> {
-        ModelLoader::new("./models").list_models()
+    pub fn list_available(model_cache: &Path) -> Vec<ferrite_core::ModelInfo> {
+        ModelLoader::new(model_cache).list_models()
     }
 
     /// Search for models
-    pub fn search(query: &str) -> Vec<ferrite_core::ModelInfo> {
-        ModelLoader::new("./models").search(query)
+    pub fn search(model_cache: &Path, query: &str) -> Vec<ferrite_core::ModelInfo> {
+        ModelLoader::new(model_cache).search(query)
+    }
+
+    pub fn tokenizer(&self) -> Arc<ferrite_core::Tokenizer> {
+        Arc::clone(&self.tokenizer)
     }
 }
 
 /// Tokenizer adapter (for direct tokenization without full model)
-pub struct TokenizerAdapter;
+pub struct TokenizerAdapter<'a> {
+    tokenizer: &'a ferrite_core::Tokenizer,
+}
 
-impl TokenizerAdapter {
-    pub fn encode(text: &str) -> Vec<u32> {
-        text.split_whitespace()
-            .enumerate()
-            .map(|(i, _)| (i + 1000) as u32)
-            .collect()
+impl<'a> TokenizerAdapter<'a> {
+    pub fn new(tokenizer: &'a ferrite_core::Tokenizer) -> Self {
+        Self { tokenizer }
     }
 
-    pub fn decode(tokens: &[u32]) -> String {
-        format!("[decoded {} tokens]", tokens.len())
+    pub fn encode(&self, text: &str) -> Vec<u32> {
+        self.tokenizer
+            .encode(text)
+            .map(|encoding| encoding.ids)
+            .unwrap_or_default()
     }
 
-    pub fn decode_token(token: u32) -> String {
-        format!("tok_{}", token)
+    pub fn decode(&self, tokens: &[u32]) -> String {
+        self.tokenizer.decode(tokens, true).unwrap_or_default()
+    }
+
+    pub fn decode_token(&self, token: u32) -> String {
+        self.decode(&[token])
     }
 }

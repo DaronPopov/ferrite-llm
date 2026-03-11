@@ -30,3 +30,7 @@ Thumbs.db
 
 # Archives
 /examples/archive/
+
+# ferrite-os generated artifacts
+/ferrite-os/build/ptx_env.mk
+/ferrite-os/lib/

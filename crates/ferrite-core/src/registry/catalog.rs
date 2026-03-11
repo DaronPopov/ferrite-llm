@@ -204,6 +204,25 @@ impl Catalog {
             requires_auth: false,
         });
 
+        self.register(ModelSpec {
+            name: "qwen3-8b-q4".into(),
+            family: ModelFamily::Llama,
+            source: ModelSource::HuggingFace {
+                repo: "Qwen/Qwen3-8B-GGUF".into(),
+                file: Some("qwen3-8b-q4_k_m.gguf".into()),
+                revision: None,
+            },
+            format: WeightFormat::GGUF,
+            chat_template: ChatTemplate::ChatML,
+            context_length: 40960,
+            tokenizer: TokenizerSource::HuggingFace {
+                repo: "Qwen/Qwen3-8B".into(),
+            },
+            description: "Qwen3 8B Instruct (4-bit quantized)".into(),
+            size: "8B".into(),
+            requires_auth: false,
+        });
+
         // ═══════════════════════════════════════════════════════════════
         // PHI FAMILY
         // ═══════════════════════════════════════════════════════════════

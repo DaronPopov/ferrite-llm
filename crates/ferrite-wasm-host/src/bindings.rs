@@ -13,7 +13,9 @@ wasmtime::component::bindgen!({
 // Re-export key types for convenience
 pub use ferrite::inference::inference::GenerationConfig as WitGenConfig;
 pub use ferrite::inference::inference::{
+    Generation as WitGeneration,
     Host as InferenceHost,
+    HostGeneration,
     HostModel,
     Model as WitModel,
 };

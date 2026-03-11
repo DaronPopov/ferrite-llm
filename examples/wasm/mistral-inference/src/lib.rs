@@ -22,8 +22,7 @@ impl Guest for MistralDemo {
         println!("📦 Loading Mistral 7B Q4 (4-bit quantized)...");
         println!("⏳ This may take a minute on first run (downloading ~4GB model)...\n");
 
-        // PLACE YOUR TOKEN HERE IN THE STRING
-        let hf_token = Some("".to_string());
+        let hf_token = std::env::var("HF_TOKEN").ok();
 
         let model = load_model("mistral-7b-q4", hf_token.as_deref())?;
 
@@ -63,9 +62,13 @@ impl Guest for MistralDemo {
             print!("🤖 Mistral: ");
             io::stdout().flush().map_err(|e| e.to_string())?;
 
-            match model.generate(prompt, config) {
-                Ok(response) => {
-                    println!("{}\n", response);
+            match model.start_generate_stream(prompt, config) {
+                Ok(generation) => {
+                    while let Some(chunk) = generation.next_chunk()? {
+                        print!("{chunk}");
+                        io::stdout().flush().map_err(|e| e.to_string())?;
+                    }
+                    println!();
                 }
                 Err(e) => {
                     println!("❌ Error: {}\n", e);

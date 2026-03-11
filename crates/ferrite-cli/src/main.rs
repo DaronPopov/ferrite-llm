@@ -97,6 +97,10 @@ enum Command {
         #[arg(long)]
         check: bool,
 
+        /// Skip refreshing Cargo.lock to the newest compatible dependency versions
+        #[arg(long)]
+        skip_deps_update: bool,
+
         /// Skip installing the wasm32-wasip1 Rust target
         #[arg(long)]
         skip_target: bool,
@@ -150,9 +154,9 @@ fn main() -> Result<()> {
             init_logging(verbose);
             show_info()
         }
-        Command::Setup { check, skip_target, skip_wasm_tools, verbose } => {
+        Command::Setup { check, skip_deps_update, skip_target, skip_wasm_tools, verbose } => {
             init_logging(verbose);
-            setup_wasm_toolchain(check, skip_target, skip_wasm_tools)
+            setup_wasm_toolchain(check, skip_deps_update, skip_target, skip_wasm_tools)
         }
     }
 }
@@ -349,7 +353,12 @@ fn manage_cache(model_cache: &PathBuf, clear: bool, stats: bool) -> Result<()> {
     Ok(())
 }
 
-fn setup_wasm_toolchain(check: bool, skip_target: bool, skip_wasm_tools: bool) -> Result<()> {
+fn setup_wasm_toolchain(
+    check: bool,
+    skip_deps_update: bool,
+    skip_target: bool,
+    skip_wasm_tools: bool,
+) -> Result<()> {
     println!("Ferrite WASM setup");
     println!("==================\n");
 
@@ -366,6 +375,7 @@ fn setup_wasm_toolchain(check: bool, skip_target: bool, skip_wasm_tools: bool) -
     print_status("cargo", cargo_available, "required to install wasm-tools");
     print_status("wasm32-wasip1 target", target_installed, "Rust stdlib for WASI Preview 1");
     print_status("wasm-tools", wasm_tools_installed, "used for component embed/new");
+    print_status("cargo dependency refresh", !skip_deps_update, "runs `cargo update` before rebuilding");
 
     if check {
         if (!skip_target && !target_installed) || (!skip_wasm_tools && !wasm_tools_installed) {
@@ -387,6 +397,11 @@ fn setup_wasm_toolchain(check: bool, skip_target: bool, skip_wasm_tools: bool) -
     if !skip_wasm_tools && !wasm_tools_installed {
         anyhow::ensure!(cargo_available, "cargo is not available in PATH");
         run_bootstrap_command("Installing wasm-tools", "cargo", &["install", "wasm-tools"])?;
+    }
+
+    if !skip_deps_update {
+        anyhow::ensure!(cargo_available, "cargo is not available in PATH");
+        run_bootstrap_command("Refreshing Cargo dependencies", "cargo", &["update"])?;
     }
 
     println!("\nWASM setup complete.");
@@ -421,6 +436,13 @@ fn show_info() -> Result<()> {
     {
         println!("   • CUDA: ❌ Not compiled with CUDA support");
     }
+
+    let backend = std::env::var("FERRITE_BACKEND")
+        .ok()
+        .or_else(|| std::env::var("FERRITE_INFERENCE_BACKEND").ok())
+        .unwrap_or_else(|| "auto".to_string());
+    println!("   • Backend policy: {}", backend);
+    println!("   • Require CUDA: {}", if std::env::var("FERRITE_REQUIRE_CUDA").ok().as_deref() == Some("1") { "yes" } else { "no" });
 
     println!();
 

@@ -366,6 +366,19 @@ impl<M: InferenceModel> ChatSession<M> {
         &self.config
     }
 
+    /// Update generation parameters for subsequent turns.
+    pub fn set_generation_config(&mut self, generation: GenerationConfig) {
+        self.sampler = Sampler::new(SamplerConfig {
+            temperature: generation.temperature,
+            top_p: generation.top_p,
+            top_k: generation.top_k,
+            min_p: generation.min_p,
+            repetition_penalty: generation.repetition_penalty,
+            seed: generation.seed,
+        });
+        self.config.generation = generation;
+    }
+
     /// Get the cached tokens (for debugging/inspection)
     pub fn cached_tokens(&self) -> &[u32] {
         &self.cached_tokens

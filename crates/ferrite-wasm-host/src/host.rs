@@ -3,12 +3,15 @@
 //! Implements wasmtime Host traits and bridges to ferrite engine via adapter layer.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use wasmtime::component::{Resource, ResourceTable};
 
 use super::adapter::{ModelAdapter, TokenizerAdapter, wit_to_ferrite_config};
 use crate::bindings::{
+    HostGeneration,
     WitGenConfig,
     InferenceHost,
+    WitGeneration,
     HostModel,
     WitModel,
     TokenizerHost,
@@ -16,8 +19,8 @@ use crate::bindings::{
 
 /// Host state - bridges WASM to ferrite engine
 pub struct HostState {
-    #[allow(dead_code)]
     model_cache: PathBuf,
+    active_tokenizer: Option<Arc<ferrite_core::Tokenizer>>,
     table: ResourceTable,
 }
 
@@ -25,6 +28,7 @@ impl HostState {
     pub fn new(model_cache: PathBuf) -> anyhow::Result<Self> {
         Ok(Self {
             model_cache,
+            active_tokenizer: None,
             table: ResourceTable::new(),
         })
     }
@@ -44,11 +48,13 @@ impl InferenceHost for HostState {
         tracing::info!("🔄 Loading model: {}", model_name);
 
         // Create model adapter
-        let model_adapter = ModelAdapter::new(model_name.clone(), auth_token)?;
+        let model_adapter = ModelAdapter::new(
+            model_name.clone(),
+            self.model_cache.clone(),
+            auth_token,
+        )?;
+        self.active_tokenizer = Some(model_adapter.tokenizer());
 
-        // Push the model adapter into the resource table
-        // This returns a Resource<ModelAdapter>, but we need Resource<WitModel>
-        // We'll use rep() to get the underlying representation
         let resource = self
             .table
             .push(model_adapter)
@@ -56,11 +62,7 @@ impl InferenceHost for HostState {
 
         tracing::info!("✓ Model '{}' loaded", model_name);
 
-        // Convert Resource<ModelAdapter> to Resource<WitModel> using unsafe transmute
-        // This is safe because Resource<T> is just a newtype wrapper around u32
-        let wit_resource: Resource<WitModel> = unsafe { std::mem::transmute(resource) };
-
-        Ok(wit_resource)
+        Ok(Resource::new_own(resource.rep()))
     }
 }
 
@@ -72,10 +74,8 @@ impl HostModel for HostState {
         prompt: String,
         config: WitGenConfig,
     ) -> Result<String, String> {
-        // Transmute back to Resource<ModelAdapter>
-        let model_resource: Resource<ModelAdapter> = unsafe { std::mem::transmute(model) };
+        let model_resource = Resource::<ModelAdapter>::new_borrow(model.rep());
 
-        // Get the model from the table
         let model_adapter = self
             .table
             .get_mut(&model_resource)
@@ -95,7 +95,7 @@ impl HostModel for HostState {
         prompt: String,
         config: WitGenConfig,
     ) -> Result<Vec<String>, String> {
-        let model_resource: Resource<ModelAdapter> = unsafe { std::mem::transmute(model) };
+        let model_resource = Resource::<ModelAdapter>::new_borrow(model.rep());
 
         let model_adapter = self
             .table
@@ -106,10 +106,55 @@ impl HostModel for HostState {
         model_adapter.generate_stream(&prompt, &ferrite_config)
     }
 
+    fn start_generate_stream(
+        &mut self,
+        model: Resource<WitModel>,
+        prompt: String,
+        config: WitGenConfig,
+    ) -> Result<Resource<WitGeneration>, String> {
+        let model_resource = Resource::<ModelAdapter>::new_borrow(model.rep());
+
+        let model_adapter = self
+            .table
+            .get_mut(&model_resource)
+            .map_err(|e| format!("Model not found: {}", e))?;
+
+        let ferrite_config = wit_to_ferrite_config(&config);
+        let generation = model_adapter.start_generate_stream(&prompt, &ferrite_config)?;
+
+        let resource = self
+            .table
+            .push(generation)
+            .map_err(|e| format!("Generation handle creation failed: {}", e))?;
+
+        Ok(Resource::new_own(resource.rep()))
+    }
+
     fn drop(&mut self, model: Resource<WitModel>) -> wasmtime::Result<()> {
-        let model_resource: Resource<ModelAdapter> = unsafe { std::mem::transmute(model) };
+        let model_resource = Resource::<ModelAdapter>::new_own(model.rep());
         self.table.delete(model_resource)?;
         tracing::info!("Model resource dropped");
+        Ok(())
+    }
+}
+
+impl HostGeneration for HostState {
+    fn next_chunk(
+        &mut self,
+        generation: Resource<WitGeneration>,
+    ) -> Result<Option<String>, String> {
+        let generation_resource = Resource::<super::adapter::ActiveGeneration>::new_borrow(generation.rep());
+        let generation_handle = self
+            .table
+            .get_mut(&generation_resource)
+            .map_err(|e| format!("Generation handle not found: {}", e))?;
+        generation_handle.next_chunk()
+    }
+
+    fn drop(&mut self, generation: Resource<WitGeneration>) -> wasmtime::Result<()> {
+        let generation_resource = Resource::<super::adapter::ActiveGeneration>::new_own(generation.rep());
+        self.table.delete(generation_resource)?;
+        tracing::info!("Generation handle dropped");
         Ok(())
     }
 }
@@ -117,14 +162,32 @@ impl HostModel for HostState {
 /// Implement tokenizer interface
 impl TokenizerHost for HostState {
     fn encode(&mut self, text: String) -> Vec<u32> {
-        TokenizerAdapter::encode(&text)
+        self.active_tokenizer
+            .as_deref()
+            .map(|tokenizer| TokenizerAdapter::new(tokenizer).encode(&text))
+            .unwrap_or_else(|| {
+                tracing::warn!("Tokenizer requested before a model was loaded");
+                Vec::new()
+            })
     }
 
     fn decode(&mut self, tokens: Vec<u32>) -> String {
-        TokenizerAdapter::decode(&tokens)
+        self.active_tokenizer
+            .as_deref()
+            .map(|tokenizer| TokenizerAdapter::new(tokenizer).decode(&tokens))
+            .unwrap_or_else(|| {
+                tracing::warn!("Tokenizer requested before a model was loaded");
+                String::new()
+            })
     }
 
     fn decode_token(&mut self, token: u32) -> String {
-        TokenizerAdapter::decode_token(token)
+        self.active_tokenizer
+            .as_deref()
+            .map(|tokenizer| TokenizerAdapter::new(tokenizer).decode_token(token))
+            .unwrap_or_else(|| {
+                tracing::warn!("Tokenizer requested before a model was loaded");
+                String::new()
+            })
     }
 }
