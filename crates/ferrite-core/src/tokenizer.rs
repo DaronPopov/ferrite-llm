@@ -104,6 +104,8 @@ impl Tokenizer {
                 .ok()
                 .flatten()
                 .map(ChatTemplateProcessor::new)
+                .transpose()
+                .map_err(|e| TokenizerError::TemplateFailed(e.to_string()))?
         } else {
             None
         };
