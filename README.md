@@ -34,12 +34,17 @@ What it does:
 
 Requirements:
 
-- `git`
-- `cargo`
-- `rustup`
+- `curl` or `wget`
 - CUDA installed already if you want GPU inference
 
-The installer stays in user space. It does not attempt `apt` or system package changes.
+What it bootstraps automatically in user space:
+
+- Rust via `rustup` if Rust is missing
+- repo download via `git` if available, otherwise a source tarball
+- `ferrite-rt`
+- WASM prerequisites and sample component build
+
+The installer stays in user space. It does not attempt `apt`, `dnf`, or system package changes.
 
 ## Quick Run
 
