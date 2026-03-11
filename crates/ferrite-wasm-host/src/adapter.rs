@@ -8,8 +8,9 @@ use ferrite_core::registry::{
     ChatTemplate, DownloadedModel, ModelFamily, ModelLoader, ModelSpec,
 };
 use mistralrs::{
-    ChatCompletionChunkResponse, ChunkChoice, Delta, GgufModelBuilder, RequestBuilder,
-    Response as MistralResponse, TextMessageRole, Usage,
+    ChatCompletionChunkResponse, ChunkChoice, Delta, DeviceMapSetting, GgufModelBuilder,
+    RequestBuilder, Response as MistralResponse, TextMessageRole, Usage,
+    Device as MistralDevice,
 };
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -236,6 +237,12 @@ impl MistralRsSession {
         }
         if force_cpu {
             builder = builder.with_force_cpu();
+        } else {
+            let cuda_device = MistralDevice::new_cuda(0)
+                .map_err(|e| format!("Failed to create CUDA device 0 for mistralrs: {e}"))?;
+            builder = builder
+                .with_device(cuda_device)
+                .with_device_mapping(DeviceMapSetting::dummy());
         }
 
         let model = runtime
