@@ -75,6 +75,28 @@ cargo run -p ferrite-cli -- \
 
 That keeps the host binary in sync with WIT changes and avoids stale installed binaries.
 
+## Docker
+
+Ferrite can also run as a GPU container. Build the image from the repo root:
+
+```bash
+docker build -t ferrite-llm .
+```
+
+Run it with NVIDIA GPU passthrough:
+
+```bash
+docker run --rm -it --gpus all \
+  -e HF_TOKEN=your_token_here \
+  -e FERRITE_MODEL=qwen2.5-7b-q4 \
+  -e FERRITE_REQUIRE_CUDA=1 \
+  -e FERRITE_BACKEND=mistralrs \
+  -v ferrite-models:/models \
+  ferrite-llm
+```
+
+The image entrypoint is `ferrite-rt`, and the default command runs the bundled sample component at `/opt/ferrite/mistral_inference.component.wasm`.
+
 ## Backend Model
 
 Ferrite exposes backend selection explicitly.

@@ -6,6 +6,7 @@ Use one of these two flows:
 
 - repo workflow: run from a cloned checkout with `cargo run -p ferrite-cli -- ...`
 - installed workflow: run the installed `ferrite-rt` binary after `install.sh`
+- container workflow: run the GPU-enabled Docker image
 
 ## What This Runs
 
@@ -119,6 +120,28 @@ The installer also verifies Ferrite's owned CUDA kernel path by running:
 ```bash
 cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
 ```
+
+### Container workflow
+
+Build the image:
+
+```bash
+docker build -t ferrite-llm .
+```
+
+Run it:
+
+```bash
+docker run --rm -it --gpus all \
+  -e HF_TOKEN=your_token_here \
+  -e FERRITE_MODEL=qwen2.5-7b-q4 \
+  -e FERRITE_REQUIRE_CUDA=1 \
+  -e FERRITE_BACKEND=mistralrs \
+  -v ferrite-models:/models \
+  ferrite-llm
+```
+
+The container entrypoint is `ferrite-rt`, and the default command runs `/opt/ferrite/mistral_inference.component.wasm`.
 
 ### Qwen3 example
 
