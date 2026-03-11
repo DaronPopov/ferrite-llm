@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use ferrite_wasm_host::{HostState, bindings::FerriteGuest};
 use std::path::PathBuf;
+use std::process::{Command as ProcessCommand, Stdio};
 use tracing::{info, warn, debug};
 use wasmtime::{
     component::{Component, Linker},
@@ -89,6 +90,25 @@ enum Command {
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
     },
+
+    /// Install local prerequisites for building guest WASM modules
+    Setup {
+        /// Check prerequisites without installing anything
+        #[arg(long)]
+        check: bool,
+
+        /// Skip installing the wasm32-wasip1 Rust target
+        #[arg(long)]
+        skip_target: bool,
+
+        /// Skip installing the wasm-tools CLI
+        #[arg(long)]
+        skip_wasm_tools: bool,
+
+        /// Verbose logging
+        #[arg(short, long, action = clap::ArgAction::Count)]
+        verbose: u8,
+    },
 }
 
 /// Runtime state that implements the host interface
@@ -129,6 +149,10 @@ fn main() -> Result<()> {
         Command::Info { verbose } => {
             init_logging(verbose);
             show_info()
+        }
+        Command::Setup { check, skip_target, skip_wasm_tools, verbose } => {
+            init_logging(verbose);
+            setup_wasm_toolchain(check, skip_target, skip_wasm_tools)
         }
     }
 }
@@ -325,6 +349,51 @@ fn manage_cache(model_cache: &PathBuf, clear: bool, stats: bool) -> Result<()> {
     Ok(())
 }
 
+fn setup_wasm_toolchain(check: bool, skip_target: bool, skip_wasm_tools: bool) -> Result<()> {
+    println!("Ferrite WASM setup");
+    println!("==================\n");
+
+    let rustup_available = command_exists("rustup");
+    let cargo_available = command_exists("cargo");
+    let target_installed = rustup_available && rustup_target_installed("wasm32-wasip1")?;
+    let wasm_tools_installed = command_exists("wasm-tools");
+
+    print_status(
+        "rustup",
+        rustup_available,
+        "required to install the wasm32-wasip1 target",
+    );
+    print_status("cargo", cargo_available, "required to install wasm-tools");
+    print_status("wasm32-wasip1 target", target_installed, "Rust stdlib for WASI Preview 1");
+    print_status("wasm-tools", wasm_tools_installed, "used for component embed/new");
+
+    if check {
+        if (!skip_target && !target_installed) || (!skip_wasm_tools && !wasm_tools_installed) {
+            anyhow::bail!("WASM prerequisites are missing");
+        }
+        println!("\nAll requested prerequisites are installed.");
+        return Ok(());
+    }
+
+    if !skip_target && !target_installed {
+        anyhow::ensure!(rustup_available, "rustup is not available in PATH");
+        run_bootstrap_command(
+            "Installing Rust target wasm32-wasip1",
+            "rustup",
+            &["target", "add", "wasm32-wasip1"],
+        )?;
+    }
+
+    if !skip_wasm_tools && !wasm_tools_installed {
+        anyhow::ensure!(cargo_available, "cargo is not available in PATH");
+        run_bootstrap_command("Installing wasm-tools", "cargo", &["install", "wasm-tools"])?;
+    }
+
+    println!("\nWASM setup complete.");
+    println!("You can now build guest modules with `cargo build --target wasm32-wasip1 --release`.");
+    Ok(())
+}
+
 fn show_info() -> Result<()> {
     println!("🔥 Ferrite Runtime - Neural Inference OS");
     println!("   Version: {}", env!("CARGO_PKG_VERSION"));
@@ -396,4 +465,50 @@ fn format_size(bytes: u64) -> String {
     } else {
         format!("{} bytes", bytes)
     }
+}
+
+fn print_status(name: &str, installed: bool, description: &str) {
+    let marker = if installed { "ok" } else { "missing" };
+    println!("{name:20} {marker:8} {description}");
+}
+
+fn command_exists(program: &str) -> bool {
+    std::env::var_os("PATH")
+        .into_iter()
+        .flat_map(std::env::split_paths)
+        .map(|dir| dir.join(program))
+        .any(|path| path.is_file())
+}
+
+fn rustup_target_installed(target: &str) -> Result<bool> {
+    let output = ProcessCommand::new("rustup")
+        .args(["target", "list", "--installed"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .output()
+        .context("failed to query installed Rust targets")?;
+
+    anyhow::ensure!(
+        output.status.success(),
+        "rustup target list --installed exited with status {}",
+        output.status
+    );
+
+    let stdout = String::from_utf8(output.stdout).context("rustup returned non-UTF8 output")?;
+    Ok(stdout.lines().any(|line| line.trim() == target))
+}
+
+fn run_bootstrap_command(label: &str, program: &str, args: &[&str]) -> Result<()> {
+    println!("\n{label}...");
+
+    let status = ProcessCommand::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .with_context(|| format!("failed to launch `{program}`"))?;
+
+    anyhow::ensure!(status.success(), "`{program}` exited with status {status}");
+    Ok(())
 }

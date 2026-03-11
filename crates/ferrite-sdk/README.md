@@ -61,6 +61,9 @@ export!(MyAI);
 ## Build & Run
 
 ```bash
+# Bootstrap local WASM tooling once
+ferrite-rt setup
+
 # Build WASM module
 cargo build --target wasm32-wasip1 --release
 

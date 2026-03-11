@@ -5,9 +5,9 @@ Production WASM runtime for neural inference.
 ## Installation
 
 ```bash
-cargo install --path .
+cargo install --path . && ferrite-rt setup
 # or
-cargo install ferrite-cli
+cargo install ferrite-cli && ferrite-rt setup
 ```
 
 ## Commands
@@ -67,6 +67,19 @@ Show system information:
 
 ```bash
 ferrite-rt info
+```
+
+### `ferrite-rt setup`
+
+Install the local WASM guest build prerequisites:
+
+```bash
+ferrite-rt setup
+
+Options:
+  --check                      Validate prerequisites without installing
+  --skip-target                Skip `rustup target add wasm32-wasip1`
+  --skip-wasm-tools            Skip `cargo install wasm-tools`
 ```
 
 Output:
