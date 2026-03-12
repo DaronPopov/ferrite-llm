@@ -1,0 +1,12 @@
+[target.x86_64-unknown-linux-gnu]
+rustflags = [
+    # ptx-kernels and mistralrs-core both compile the same candle sort/topk CUDA
+    # kernels independently. The symbols are byte-for-bit identical so it is safe
+    # to let the linker keep the first definition and discard the duplicate.
+    "-C", "link-arg=-Wl,--allow-multiple-definition",
+]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = [
+    "-C", "link-arg=-Wl,--allow-multiple-definition",
+]
