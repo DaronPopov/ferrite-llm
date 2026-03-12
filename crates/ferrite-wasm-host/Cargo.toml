@@ -39,4 +39,5 @@ tracing = "0.1"
 
 [features]
 cuda = ["ferrite-core/cuda", "mistralrs/cuda"]
+tlsf-alloc = ["ferrite-core/tlsf-alloc", "cuda"]
 default = ["cuda"]

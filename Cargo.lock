@@ -2005,6 +2005,8 @@ dependencies = [
  "cudarc 0.13.9",
  "hf-hub 0.4.3",
  "llm-tokenizer",
+ "ptx-runtime",
+ "ptx-sys",
  "serde",
  "serde_json",
  "tokio-test",

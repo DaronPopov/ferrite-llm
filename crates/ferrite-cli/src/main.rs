@@ -443,6 +443,25 @@ fn show_info() -> Result<()> {
         .unwrap_or_else(|| "auto".to_string());
     println!("   • Backend policy: {}", backend);
     println!("   • Require CUDA: {}", if std::env::var("FERRITE_REQUIRE_CUDA").ok().as_deref() == Some("1") { "yes" } else { "no" });
+    #[cfg(feature = "tlsf-alloc")]
+    {
+        println!("   • TLSF allocator support: compiled");
+        println!(
+            "   • TLSF allocator enabled: {}",
+            if matches!(
+                std::env::var("FERRITE_TLSF_ALLOC").ok().as_deref(),
+                Some("1" | "true" | "TRUE" | "True")
+            ) {
+                "yes"
+            } else {
+                "no"
+            }
+        );
+    }
+    #[cfg(not(feature = "tlsf-alloc"))]
+    {
+        println!("   • TLSF allocator support: not compiled");
+    }
 
     println!();
 

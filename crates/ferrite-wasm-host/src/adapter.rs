@@ -556,6 +556,9 @@ impl ModelAdapter {
 
     /// Load from a downloaded model
     fn load_from_downloaded(downloaded: DownloadedModel, auth_token: Option<String>) -> Result<Self, String> {
+        ferrite_core::maybe_enable_tlsf_allocator(0)
+            .map_err(|e| format!("TLSF allocator initialization failed: {e}"))?;
+
         let device = Device::cuda_if_available(0)
             .map_err(|e| format!("Device error: {}", e))?;
         let require_cuda = std::env::var("FERRITE_REQUIRE_CUDA")

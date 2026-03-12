@@ -49,6 +49,7 @@ Installer notes:
 
 - on `aarch64` Jetsons, the installer now detects the platform and prefers `/usr/local/cuda-arm64` when present
 - the install path is intended to work on desktop Linux and Jetson-class ARM Linux with CUDA already installed
+- set `FERRITE_ENABLE_TLSF_ALLOC=1` before running the installer if you want the runtime built with Ferrite's TLSF CUDA allocator hooks
 
 The installer stays in user space. It does not attempt `apt`, `dnf`, or system package changes.
 
@@ -104,6 +105,7 @@ Ferrite exposes backend selection explicitly.
 - `FERRITE_BACKEND=candle`
 - `FERRITE_BACKEND=mistralrs`
 - `FERRITE_REQUIRE_CUDA=1` to fail instead of falling back to CPU
+- `FERRITE_TLSF_ALLOC=1` to enable Ferrite's TLSF CUDA allocator at runtime when the binary was built with `tlsf-alloc`
 
 Legacy compatibility:
 
@@ -120,6 +122,22 @@ That reports:
 - CUDA availability
 - backend policy
 - whether CUDA is required
+- whether TLSF allocator support was compiled into the runtime
+
+To build and run the Candle backend with TLSF allocator support locally:
+
+```bash
+LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
+cargo run -p ferrite-cli --features tlsf-alloc -- info
+LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
+FERRITE_TLSF_ALLOC=1 \
+FERRITE_BACKEND=candle \
+FERRITE_REQUIRE_CUDA=1 \
+cargo run -p ferrite-cli --features tlsf-alloc -- \
+  run target/wasm32-wasip1/release/mistral_inference.component.wasm
+```
+
+For installed binaries, build with `FERRITE_ENABLE_TLSF_ALLOC=1` during install. The installer copies `libptx_os.so` into `~/.local/lib`; add that directory to `LD_LIBRARY_PATH` before running the TLSF-enabled binary.
 
 ## Add A Model
 

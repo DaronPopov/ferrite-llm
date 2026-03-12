@@ -11,6 +11,7 @@ categories = ["science", "machine-learning"]
 [features]
 default = ["cuda"]
 cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda", "cudarc"]
+tlsf-alloc = ["cuda", "cudarc/ptx-alloc", "dep:ptx-runtime", "dep:ptx-sys"]
 
 [dependencies]
 # Candle - Pure Rust ML
@@ -20,6 +21,8 @@ candle-transformers = "0.8"
 
 # CUDA support for custom kernels (patched to ferriterc cudarc-ptx with TLSF allocator)
 cudarc = { version = "0.13", features = ["f16"], optional = true }
+ptx-runtime = { path = "../../ferrite-os/crates/public/ptx-runtime", optional = true }
+ptx-sys = { path = "../../ferrite-os/crates/internal/ptx-sys", optional = true }
 
 # Tokenization
 llm-tokenizer = "1.3"

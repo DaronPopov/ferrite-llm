@@ -38,4 +38,5 @@ optional = true
 
 [features]
 cuda = ["candle-core/cuda", "ferrite-wasm-host/cuda"]
+tlsf-alloc = ["cuda", "ferrite-wasm-host/tlsf-alloc"]
 default = ["cuda"]

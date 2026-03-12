@@ -73,6 +73,7 @@ cargo run -p ferrite-cli -- info
 ```
 
 That reports CUDA availability, backend policy, and whether CUDA is required.
+If the runtime was built with `--features tlsf-alloc`, it also reports TLSF allocator support and whether `FERRITE_TLSF_ALLOC=1` is currently enabled.
 
 ## Pick A Model
 
@@ -164,10 +165,42 @@ cargo run -p ferrite-cli -- \
 - `FERRITE_BACKEND=mistralrs`: force the `mistralrs` backend
 - `FERRITE_BACKEND=candle`: force the Candle backend
 - `FERRITE_MODEL_CACHE=/path/to/models`: override model cache directory
+- `FERRITE_TLSF_ALLOC=1`: enable Ferrite's TLSF CUDA allocator hooks when the binary was built with `--features tlsf-alloc`
+- `FERRITE_TLSF_PREFER_ORIN_UM=1`: prefer Orin unified memory behavior for the TLSF runtime
+- `FERRITE_TLSF_VERBOSE=1`: log TLSF allocator initialization details
 
 Legacy compatibility:
 
 - `FERRITE_INFERENCE_BACKEND` is still accepted as an alias for `FERRITE_BACKEND`
+
+## Candle With TLSF Allocator
+
+The main Candle backend can now be built with Ferrite's TLSF allocator hooks:
+
+```bash
+cargo run -p ferrite-cli --features tlsf-alloc -- info
+```
+
+Run inference with the allocator enabled:
+
+```bash
+LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
+HF_TOKEN=your_token_here \
+FERRITE_MODEL=mistral-7b-q4 \
+FERRITE_REQUIRE_CUDA=1 \
+FERRITE_BACKEND=candle \
+FERRITE_TLSF_ALLOC=1 \
+cargo run -p ferrite-cli --features tlsf-alloc -- \
+  run target/wasm32-wasip1/release/mistral_inference.component.wasm
+```
+
+For installed binaries, build with allocator support first:
+
+```bash
+FERRITE_ENABLE_TLSF_ALLOC=1 ./install.sh
+```
+
+The TLSF runtime depends on `libptx_os.so`. For repo runs, add `ferrite-os/lib` to `LD_LIBRARY_PATH`. For installed binaries, the installer copies that library into `~/.local/lib`; export `LD_LIBRARY_PATH="$HOME/.local/lib:$LD_LIBRARY_PATH"` before running the TLSF-enabled binary.
 
 ## Inspect Available Models
 

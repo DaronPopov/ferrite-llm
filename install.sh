@@ -9,6 +9,7 @@ PREFIX="${FERRITE_PREFIX:-$HOME/.local}"
 BIN_DIR="$PREFIX/bin"
 ARCH="$(uname -m)"
 JETSON_MODEL=""
+ENABLE_TLSF_ALLOC="${FERRITE_ENABLE_TLSF_ALLOC:-0}"
 
 detect_jetson() {
     if [ "$ARCH" != "aarch64" ]; then
@@ -157,7 +158,14 @@ log "Refreshing Cargo dependencies"
 cargo update
 
 log "Installing ferrite runtime into $PREFIX"
-cargo install --path crates/ferrite-cli --root "$PREFIX" --force
+if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then
+    log "Building ferrite runtime with TLSF allocator support"
+    cargo install --path crates/ferrite-cli --root "$PREFIX" --force --features tlsf-alloc
+    mkdir -p "$PREFIX/lib"
+    cp ferrite-os/lib/libptx_os.so "$PREFIX/lib/libptx_os.so"
+else
+    cargo install --path crates/ferrite-cli --root "$PREFIX" --force
+fi
 
 log "Provisioning WASM toolchain and local prerequisites"
 "$BIN_DIR/ferrite-rt" setup --skip-deps-update
@@ -194,15 +202,27 @@ Detected platform:
 CUDA toolkit:
   $CUDA_HOME
 
+TLSF allocator build:
+  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf '%s' "enabled"; else printf '%s' "disabled"; fi)
+
 Suggested PATH update:
   export PATH="$BIN_DIR:\$PATH"
 
+Suggested library path update:
+  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'export LD_LIBRARY_PATH="%s/lib:\\$LD_LIBRARY_PATH"' "$PREFIX"; else printf 'not required'; fi)
+
 Quick run:
   export PATH="$BIN_DIR:\$PATH"
+  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'export LD_LIBRARY_PATH="%s/lib:\\$LD_LIBRARY_PATH"' "$PREFIX"; fi)
   HF_TOKEN=your_token_here \\
   FERRITE_REQUIRE_CUDA=1 \\
   FERRITE_BACKEND=mistralrs \\
   ferrite-rt run \\
+    $SRC_DIR/target/wasm32-wasip1/release/mistral_inference.component.wasm
+
+TLSF runtime toggle:
+  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'FERRITE_TLSF_ALLOC=1 ferrite-rt info'; else printf 're-run install with FERRITE_ENABLE_TLSF_ALLOC=1 to build TLSF support'; fi)
+  FERRITE_TLSF_ALLOC=1 FERRITE_BACKEND=candle ferrite-rt run \\
     $SRC_DIR/target/wasm32-wasip1/release/mistral_inference.component.wasm
 
 EOF
