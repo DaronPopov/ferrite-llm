@@ -1193,7 +1193,48 @@ fn jetson_libtorch_candidates() -> Vec<PathBuf> {
     candidates.push(PathBuf::from("/usr/local/libtorch"));
     candidates.push(PathBuf::from("/opt/libtorch"));
     candidates.push(PathBuf::from("/usr/lib/aarch64-linux-gnu/libtorch"));
+    candidates.push(PathBuf::from("/usr/lib/aarch64-linux-gnu"));
+    candidates.push(PathBuf::from("/usr/local"));
+    candidates.push(PathBuf::from("/usr"));
+    candidates.extend(discover_libtorch_roots(
+        &[
+            PathBuf::from("/usr/local"),
+            PathBuf::from("/opt"),
+            PathBuf::from("/usr/lib/aarch64-linux-gnu"),
+            PathBuf::from("/usr"),
+        ],
+        4,
+    ));
+    candidates.sort();
+    candidates.dedup();
     candidates
+}
+
+fn discover_libtorch_roots(search_roots: &[PathBuf], max_depth: usize) -> Vec<PathBuf> {
+    let mut found = Vec::new();
+    for root in search_roots {
+        discover_libtorch_roots_inner(root, 0, max_depth, &mut found);
+    }
+    found
+}
+
+fn discover_libtorch_roots_inner(path: &Path, depth: usize, max_depth: usize, found: &mut Vec<PathBuf>) {
+    if depth > max_depth || !path.is_dir() {
+        return;
+    }
+    if looks_like_libtorch_root(path) {
+        found.push(path.to_path_buf());
+        return;
+    }
+    let Ok(entries) = fs::read_dir(path) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let child = entry.path();
+        if child.is_dir() {
+            discover_libtorch_roots_inner(&child, depth + 1, max_depth, found);
+        }
+    }
 }
 
 fn resolve_repo_revision(repo_cache: &Path, commit: &str) -> Result<String, DynError> {
