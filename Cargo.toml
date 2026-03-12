@@ -57,6 +57,7 @@ humansize = "2"
 # Patch crates-io deps to use ferriterc PTX forks (TLSF O(1) allocator)
 [patch.crates-io]
 cudarc = { path = "external/cudarc-ptx" }
+gemm-common = { path = "external/gemm-common" }
 cudarc_019 = { package = "cudarc", path = "external/cudarc-ptx-019" }
 
 [profile.release]
