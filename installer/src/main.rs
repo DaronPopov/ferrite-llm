@@ -892,7 +892,7 @@ fn detect_jetson_system_asset(state_root: &Path, asset: &BinaryAsset) -> Result<
     fs::create_dir_all(&asset_root)?;
     let candidates = jetson_libtorch_candidates();
     for candidate in candidates {
-        if candidate.is_dir() {
+        if looks_like_libtorch_root(&candidate) {
             let payload_path = asset_payload_path(state_root, asset);
             if payload_path.exists() {
                 remove_existing_path(&payload_path)?;
@@ -1003,6 +1003,28 @@ fn update_runtime_alias(state_root: &Path, asset: &BinaryAsset, payload_path: &P
     }
     create_symlink(payload_path, &alias_path)?;
     Ok(())
+}
+
+fn looks_like_libtorch_root(path: &Path) -> bool {
+    (path.join("include/torch/torch.h").exists()
+        || path
+            .join("include/torch/csrc/api/include/torch/torch.h")
+            .exists())
+        && (path.join("lib/libtorch.so").exists()
+            || path.join("lib/libtorch_cuda.so").exists()
+            || path.join("lib/libc10_cuda.so").exists())
+}
+
+fn resolve_libtorch_root(path: &Path) -> Option<PathBuf> {
+    if looks_like_libtorch_root(path) {
+        return Some(path.to_path_buf());
+    }
+    if let Ok(real_path) = path.canonicalize() {
+        if looks_like_libtorch_root(&real_path) {
+            return Some(real_path);
+        }
+    }
+    None
 }
 
 fn create_symlink(src: &Path, dst: &Path) -> Result<(), DynError> {
@@ -1142,11 +1164,21 @@ fn resolved_libtorch_path(state_root: &Path, ctx: &InstallerContext) -> Result<P
             continue;
         }
         let payload = asset_payload_path(state_root, asset);
-        if payload.exists() {
-            return Ok(payload);
+        if let Some(resolved) = resolve_libtorch_root(&payload) {
+            return Ok(resolved);
+        }
+
+        let alias = state_root.join(asset.target.trim_start_matches(".ferrite/"));
+        if let Some(resolved) = resolve_libtorch_root(&alias) {
+            return Ok(resolved);
         }
     }
-    Ok(state_root.join("assets").join("libtorch"))
+    for candidate in jetson_libtorch_candidates() {
+        if let Some(resolved) = resolve_libtorch_root(&candidate) {
+            return Ok(resolved);
+        }
+    }
+    Err("unable to resolve a valid libtorch root".into())
 }
 
 fn asset_payload_path(state_root: &Path, asset: &BinaryAsset) -> PathBuf {
