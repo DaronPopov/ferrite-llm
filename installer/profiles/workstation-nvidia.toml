@@ -4,7 +4,7 @@ extends = "base"
 host_family = "linux"
 features = ["torch", "graphics", "capture"]
 validations = ["cuda-driver", "cargo-check", "doctor"]
-runtime_assets = ["torch-runtime-x86_64-cu128"]
+runtime_assets = ["torch-runtime-x86_64-cu126"]
 
 [profile.providers]
 system = "apt"
