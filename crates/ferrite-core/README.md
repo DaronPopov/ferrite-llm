@@ -84,6 +84,13 @@ cargo run -p ferrite-core --features cuda --example custom-attention-bench
 ```
 
 Use this path when a model needs custom CUDA operators beyond the standard Candle or `mistralrs` backends.
+Ferrite now also re-exports `ug` and `ug-cuda` under the `cuda` feature so custom tensor kernels can be compiled and launched from a Ferrite-owned API surface.
+
+Smoke test:
+
+```bash
+cargo run -p ferrite-core --features cuda --example ug-cuda-smoke
+```
 
 ## License
 

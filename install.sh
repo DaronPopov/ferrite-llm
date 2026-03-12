@@ -183,6 +183,9 @@ wasm-tools component new \
 log "Verifying Ferrite custom CUDA kernel path"
 cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
 
+log "Verifying Ferrite ug-cuda path"
+cargo run -p ferrite-core --features cuda --example ug-cuda-smoke
+
 cat <<EOF
 
 Ferrite install complete.

@@ -222,6 +222,12 @@ If a model needs custom CUDA operators, Ferrite's owned path is in:
 
 - [kernels](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels)
 - [kernel_config.toml](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels/kernel_config.toml)
+
+Ferrite also exposes `ug-cuda` directly for Rust-side tensor kernel generation and launch. Verify that path with:
+
+```bash
+cargo run -p ferrite-core --features cuda --example ug-cuda-smoke
+```
 - [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs)
 - [custom-attention-bench.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-attention-bench.rs)
 

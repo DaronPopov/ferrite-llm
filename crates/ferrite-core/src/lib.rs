@@ -29,6 +29,8 @@ pub mod flash_attention;
 pub mod cuda_kernel;
 pub mod registry;
 pub mod tlsf_alloc;
+#[cfg(feature = "cuda")]
+pub mod ug_cuda_support;
 
 // Re-exports for convenience
 pub use tokenizer::{Tokenizer, ChatMessage, ChatRole, Encoding, TokenizerError};
@@ -41,6 +43,8 @@ pub use flash_attention::{flash_attention, FlashAttentionConfig};
 
 #[cfg(feature = "cuda")]
 pub use cuda_kernel::{CudaKernel, CudaKernelConfig};
+#[cfg(feature = "cuda")]
+pub use ug_cuda_support::{create_device as create_ug_cuda_device, ug, ug_cuda};
 pub use tlsf_alloc::maybe_enable_tlsf_allocator;
 
 // Registry re-exports

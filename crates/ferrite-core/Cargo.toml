@@ -10,7 +10,7 @@ categories = ["science", "machine-learning"]
 
 [features]
 default = ["cuda"]
-cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda", "cudarc"]
+cuda = ["candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda", "cudarc", "dep:ug", "dep:ug-cuda"]
 tlsf-alloc = ["cuda", "cudarc/ptx-alloc", "dep:ptx-runtime", "dep:ptx-sys"]
 
 [dependencies]
@@ -23,6 +23,8 @@ candle-transformers = "0.8"
 cudarc = { version = "0.13", features = ["f16"], optional = true }
 ptx-runtime = { path = "../../ferrite-os/crates/public/ptx-runtime", optional = true }
 ptx-sys = { path = "../../ferrite-os/crates/internal/ptx-sys", optional = true }
+ug = { version = "0.1.0", optional = true }
+ug-cuda = { version = "0.1.0", optional = true }
 
 # Tokenization
 llm-tokenizer = "1.3"

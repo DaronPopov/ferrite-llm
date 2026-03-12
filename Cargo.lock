@@ -2011,6 +2011,8 @@ dependencies = [
  "serde_json",
  "tokio-test",
  "tracing",
+ "ug 0.1.0",
+ "ug-cuda 0.1.0",
 ]
 
 [[package]]
