@@ -59,6 +59,7 @@ humansize = "2"
 [patch.crates-io]
 cudarc = { path = "external/cudarc-ptx" }
 gemm-common = { path = "external/gemm-common" }
+gemm-common_019 = { package = "gemm-common", path = "external/gemm-common-019" }
 cudarc_019 = { package = "cudarc", path = "external/cudarc-ptx-019" }
 
 [profile.release]
