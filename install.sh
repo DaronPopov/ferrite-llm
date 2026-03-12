@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${FERRITE_REPO_URL:-https://github.com/DaronPopov/ferrite-llm.git}"
-ARCHIVE_URL="${FERRITE_ARCHIVE_URL:-https://github.com/DaronPopov/ferrite-llm/archive/refs/heads/main.tar.gz}"
-INSTALL_ROOT="${FERRITE_INSTALL_ROOT:-$HOME/.local/share/ferrite-llm}"
-SRC_DIR="${FERRITE_SRC_DIR:-$INSTALL_ROOT/src/ferrite-llm}"
+REPO_URL="${FERRITE_REPO_URL:-https://github.com/DaronPopov/ferrite.git}"
+ARCHIVE_URL="${FERRITE_ARCHIVE_URL:-https://github.com/DaronPopov/ferrite/archive/refs/heads/main.tar.gz}"
+INSTALL_ROOT="${FERRITE_INSTALL_ROOT:-$HOME/.local/share/ferrite}"
+SRC_DIR="${FERRITE_SRC_DIR:-$INSTALL_ROOT/src/ferrite}"
 PREFIX="${FERRITE_PREFIX:-$HOME/.local}"
 BIN_DIR="$PREFIX/bin"
 ARCH="$(uname -m)"
@@ -305,7 +305,7 @@ refresh_repo() {
     tar -xzf "$archive" -C "$unpack_dir"
     rm -f "$archive"
     mkdir -p "$(dirname "$SRC_DIR")"
-    mv "$unpack_dir"/ferrite-llm-main "$SRC_DIR"
+    mv "$unpack_dir"/ferrite-main "$SRC_DIR"
     rmdir "$unpack_dir" 2>/dev/null || true
 }
 
@@ -559,6 +559,9 @@ Binary:
 
 Sample component:
   $SRC_DIR/target/${wasm_target}/release/mistral_inference.component.wasm
+
+Source:
+  $SRC_DIR
 
 Detected platform:
   $ARCH${JETSON_MODEL:+ ($JETSON_MODEL)}
