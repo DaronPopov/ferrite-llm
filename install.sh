@@ -17,6 +17,8 @@ SKIP_GRAPHICS_TESTS="${FERRITE_GRAPHICS_SKIP_TESTS:-0}"
 SELECTED_MODULES=()
 INSTALL_RESULTS=()
 CUDA_HOME=""
+CUDA_ARCH=""
+CUDA_VERSION=""
 
 usage() {
     cat <<'EOF'
@@ -37,14 +39,20 @@ Options:
   --help, -h         Show this message
 
 Environment:
-  FERRITE_INSTALL_PROFILE     Default install profile
-  FERRITE_ENABLE_TLSF_ALLOC   Build ferrite-rt with TLSF allocator support
-  FERRITE_GRAPHICS_JOBS       Override parallelism for ferrite-graphics build
-  FERRITE_GRAPHICS_SKIP_TESTS Skip ferrite-graphics ctest when set to 1
+  FERRITE_INSTALL_PROFILE       Default install profile
+  FERRITE_ENABLE_TLSF_ALLOC     Build ferrite-rt with TLSF allocator support
+  FERRITE_GRAPHICS_JOBS         Override parallelism for ferrite-graphics build
+  FERRITE_GRAPHICS_SKIP_TESTS   Skip ferrite-graphics ctest when set to 1
+  FERRITE_CUDA_ARCH             Override detected CUDA arch (e.g. "87" or "75;86")
+  FERRITE_SKIP_SMOKES           Set to 1 to skip CUDA smoke tests
 
 Compatibility:
   FERRITE_BUILD_EVERYTHING=0 maps to --profile runtime
   FERRITE_BUILD_EVERYTHING=1 maps to --profile mega
+
+Supported platforms:
+  x86_64 + NVIDIA GPU (desktop, server, cloud)
+  aarch64 + NVIDIA Jetson (Orin, Xavier, TX2, Nano)
 EOF
 }
 
@@ -101,6 +109,31 @@ bootstrap_rust() {
     need_cmd rustup || fail "rustup not found after rustup install"
 }
 
+# Ensure Rust compilation targets needed by Ferrite are present.
+# wasm32-wasip1 (stable ≥1.78) supersedes wasm32-wasi; try both.
+ensure_rust_targets() {
+    log "Ensuring required Rust targets are installed"
+    if rustup target list --installed 2>/dev/null | grep -q "^wasm32-wasip1"; then
+        log "wasm32-wasip1 already installed"
+    elif rustup target add wasm32-wasip1 2>/dev/null; then
+        log "Added wasm32-wasip1"
+    elif rustup target add wasm32-wasi 2>/dev/null; then
+        log "Added wasm32-wasi (toolchain predates wasip1 rename)"
+    else
+        log "Warning: could not add wasm32 target; WASM build may fail"
+    fi
+}
+
+# Install wasm-tools via cargo if not already on PATH.
+ensure_wasm_tools() {
+    if need_cmd wasm-tools; then
+        log "wasm-tools already available: $(wasm-tools --version 2>/dev/null || true)"
+        return 0
+    fi
+    log "Installing wasm-tools"
+    cargo install wasm-tools --locked
+}
+
 detect_jetson() {
     if [ "$ARCH" != "aarch64" ]; then
         return 1
@@ -122,6 +155,69 @@ detect_jetson() {
     esac
 }
 
+# Detect CUDA compute architecture(s) for this machine.
+# Result written to CUDA_ARCH as a semicolon-separated SM list (e.g. "86;87")
+# or "native" when detection is unavailable.
+# FERRITE_CUDA_ARCH env var overrides everything.
+detect_cuda_arch() {
+    if [ -n "${FERRITE_CUDA_ARCH:-}" ]; then
+        CUDA_ARCH="$FERRITE_CUDA_ARCH"
+        log "CUDA arch override: $CUDA_ARCH"
+        return 0
+    fi
+
+    # Jetson: static SM table derived from model string
+    if detect_jetson; then
+        case "$JETSON_MODEL" in
+            *Orin*)
+                CUDA_ARCH="87" ;;   # Jetson AGX Orin, Orin NX, Orin Nano
+            *Xavier*)
+                CUDA_ARCH="72" ;;   # Jetson AGX Xavier, Xavier NX
+            *TX2*)
+                CUDA_ARCH="62" ;;   # Jetson TX2, TX2 NX
+            *Nano*|*TX1*)
+                CUDA_ARCH="53" ;;   # Jetson Nano, TX1
+            *)
+                CUDA_ARCH="72"      # conservative default for unknown Jetson
+                log "Warning: unknown Jetson model '${JETSON_MODEL}'; defaulting to SM72"
+                ;;
+        esac
+        log "Jetson CUDA architecture: SM${CUDA_ARCH} (${JETSON_MODEL})"
+        return 0
+    fi
+
+    # Desktop/server: query nvidia-smi for all installed GPU compute caps
+    if need_cmd nvidia-smi; then
+        local raw
+        raw="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null \
+              | tr -d ' \r' | sort -u)" || true
+        if [ -n "$raw" ]; then
+            # "8.6\n7.5"  →  strip dots  →  join with semicolons  →  "86;75"
+            CUDA_ARCH="$(printf '%s\n' "$raw" | tr -d '.' | paste -sd ';' -)"
+            log "Detected GPU compute capabilities: $CUDA_ARCH"
+            return 0
+        fi
+    fi
+
+    # Last resort: let nvcc/cmake resolve at compile time
+    CUDA_ARCH="native"
+    log "GPU query unavailable; using CUDA arch 'native' (nvcc will detect at build time)"
+}
+
+# Detect CUDA toolkit version for logging/summary.
+detect_cuda_version() {
+    if [ -f "$CUDA_HOME/version.json" ]; then
+        CUDA_VERSION="$(grep '"version"' "$CUDA_HOME/version.json" 2>/dev/null \
+                       | head -1 | tr -d ' ",' | cut -d: -f2)" || true
+    elif [ -f "$CUDA_HOME/version.txt" ]; then
+        CUDA_VERSION="$(head -1 "$CUDA_HOME/version.txt")" || true
+    elif need_cmd nvcc; then
+        CUDA_VERSION="$(nvcc --version 2>/dev/null \
+                       | grep -oE 'release [0-9]+\.[0-9]+' | head -1 | cut -d' ' -f2)" || true
+    fi
+    CUDA_VERSION="${CUDA_VERSION:-unknown}"
+}
+
 choose_cuda_home() {
     if [ -n "${CUDA_HOME:-}" ] && [ -d "${CUDA_HOME:-}" ]; then
         printf '%s\n' "$CUDA_HOME"
@@ -138,8 +234,17 @@ choose_cuda_home() {
         return 0
     fi
 
+    # Prefer the unversioned symlink (canonical on most installs)
     if [ -d /usr/local/cuda ]; then
         printf '%s\n' "/usr/local/cuda"
+        return 0
+    fi
+
+    # Fall back to the newest versioned install (e.g. /usr/local/cuda-12.4)
+    local versioned
+    versioned="$(ls -d /usr/local/cuda-[0-9]* 2>/dev/null | sort -t- -k2 -V | tail -1)"
+    if [ -n "$versioned" ] && [ -d "$versioned" ]; then
+        printf '%s\n' "$versioned"
         return 0
     fi
 
@@ -149,6 +254,27 @@ choose_cuda_home() {
     fi
 
     printf '%s\n' "/usr/local/cuda"
+}
+
+# Returns 0 if a CUDA device is accessible and the driver is responsive.
+cuda_is_functional() {
+    # Explicit skip override
+    if [ "${FERRITE_SKIP_SMOKES:-0}" = "1" ]; then
+        return 1
+    fi
+    # Standard path: nvidia-smi exits 0 only when the driver is up
+    if need_cmd nvidia-smi && nvidia-smi >/dev/null 2>&1; then
+        return 0
+    fi
+    # Jetson: nvidia-smi may be absent but CUDA is via the Tegra driver
+    if detect_jetson && [ -f "${CUDA_HOME}/lib64/libcudart.so" ]; then
+        return 0
+    fi
+    # Fallback: libcudart visible to the dynamic linker
+    if ldconfig -p 2>/dev/null | grep -q libcudart; then
+        return 0
+    fi
+    return 1
 }
 
 refresh_repo() {
@@ -232,23 +358,35 @@ setup_wasm_prereqs() {
 
 build_sample_guest() {
     log "Building sample guest component"
-    cargo build -p mistral-inference --target wasm32-wasip1 --release
+    # Determine the correct wasm32 target name for this toolchain
+    local wasm_target="wasm32-wasip1"
+    if ! rustup target list --installed 2>/dev/null | grep -q "^wasm32-wasip1"; then
+        wasm_target="wasm32-wasi"
+    fi
+
+    cargo build -p mistral-inference --target "$wasm_target" --release
     wasm-tools component embed wit \
-      target/wasm32-wasip1/release/mistral_inference.wasm \
-      -o target/wasm32-wasip1/release/mistral_inference.embed.wasm
+      "target/${wasm_target}/release/mistral_inference.wasm" \
+      -o "target/${wasm_target}/release/mistral_inference.embed.wasm"
     wasm-tools component new \
-      target/wasm32-wasip1/release/mistral_inference.embed.wasm \
+      "target/${wasm_target}/release/mistral_inference.embed.wasm" \
       --adapt adapters/wasi_snapshot_preview1.reactor.wasm \
-      -o target/wasm32-wasip1/release/mistral_inference.component.wasm
-    record_result "wasm-guest" "built" "target/wasm32-wasip1/release/mistral_inference.component.wasm"
+      -o "target/${wasm_target}/release/mistral_inference.component.wasm"
+    record_result "wasm-guest" "built" "target/${wasm_target}/release/mistral_inference.component.wasm"
 }
 
 run_runtime_smokes() {
+    if ! cuda_is_functional; then
+        log "Warning: no functional CUDA device detected; skipping smoke tests"
+        log "  (set FERRITE_SKIP_SMOKES=1 to silence this, or check nvidia-smi)"
+        record_result "runtime-smokes" "skipped" "no functional CUDA device"
+        return 0
+    fi
     log "Verifying Ferrite custom CUDA kernel path"
     cargo run -p ferrite-core --features cuda --example custom-kernel-smoke
     log "Verifying Ferrite ug-cuda path"
     cargo run -p ferrite-core --features cuda --example ug-cuda-smoke
-    record_result "runtime-smokes" "built"
+    record_result "runtime-smokes" "ok"
 }
 
 build_gpu_lang() {
@@ -270,8 +408,8 @@ graphics_jobs() {
 }
 
 build_graphics() {
-    need_cmd cmake || fail "mega profile requires cmake"
-    need_cmd ctest || fail "mega profile requires ctest"
+    need_cmd cmake  || fail "mega profile requires cmake"
+    need_cmd ctest  || fail "mega profile requires ctest"
     need_cmd ffmpeg || fail "mega profile requires ffmpeg"
 
     local graphics_src="external/ferrite-graphics"
@@ -281,8 +419,10 @@ build_graphics() {
 
     [ -d "$graphics_src" ] || fail "mega profile requires $graphics_src"
 
-    log "Configuring ferrite-graphics"
-    cmake -S "$graphics_src" -B "$graphics_build" -DCMAKE_INSTALL_PREFIX="$PREFIX"
+    log "Configuring ferrite-graphics (CUDA arch: ${CUDA_ARCH})"
+    cmake -S "$graphics_src" -B "$graphics_build" \
+        -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+        -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH}"
 
     log "Building ferrite-graphics"
     cmake --build "$graphics_build" -j"$jobs"
@@ -302,7 +442,7 @@ build_graphics() {
 run_doctor() {
     log "Running Ferrite doctor for profile $PROFILE"
     "$BIN_DIR/ferrite-rt" doctor --profile "$PROFILE" --repo-root "$SRC_DIR"
-    record_result "doctor" "built"
+    record_result "doctor" "ok"
 }
 
 profile_includes_platform() {
@@ -399,6 +539,10 @@ print_profile_header() {
 
 print_summary() {
     local result
+    # Resolve the wasm target name used during build for the summary path
+    local wasm_target="wasm32-wasip1"
+    rustup target list --installed 2>/dev/null | grep -q "^wasm32-wasip1" || wasm_target="wasm32-wasi"
+
     cat <<EOF
 
 Ferrite install complete.
@@ -413,13 +557,16 @@ Binary:
   $BIN_DIR/ferrite-rt
 
 Sample component:
-  $SRC_DIR/target/wasm32-wasip1/release/mistral_inference.component.wasm
+  $SRC_DIR/target/${wasm_target}/release/mistral_inference.component.wasm
 
 Detected platform:
   $ARCH${JETSON_MODEL:+ ($JETSON_MODEL)}
 
 CUDA toolkit:
-  $CUDA_HOME
+  $CUDA_HOME  (version: ${CUDA_VERSION})
+
+CUDA architecture(s):
+  ${CUDA_ARCH}
 
 TLSF allocator build:
   $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf '%s' "enabled"; else printf '%s' "disabled"; fi)
@@ -446,21 +593,24 @@ Suggested library path update:
 
 Quick run:
   export PATH="$BIN_DIR:\$PATH"
-  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'export LD_LIBRARY_PATH="%s/lib:\\$LD_LIBRARY_PATH"' "$PREFIX"; fi)
-  HF_TOKEN=your_token_here \\
+  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'export LD_LIBRARY_PATH="%s/lib:\\$LD_LIBRARY_PATH"\n  ' "$PREFIX"; fi)HF_TOKEN=your_token_here \\
   FERRITE_REQUIRE_CUDA=1 \\
   FERRITE_BACKEND=mistralrs \\
   ferrite-rt run \\
-    $SRC_DIR/target/wasm32-wasip1/release/mistral_inference.component.wasm
+    $SRC_DIR/target/${wasm_target}/release/mistral_inference.component.wasm
 
 TLSF runtime toggle:
   $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'FERRITE_TLSF_ALLOC=1 ferrite-rt info'; else printf 're-run install with FERRITE_ENABLE_TLSF_ALLOC=1 to build TLSF support'; fi)
 EOF
 }
 
+# ── main ──────────────────────────────────────────────────────────────────────
+
 parse_args "$@"
 configure_profile
 bootstrap_rust
+ensure_rust_targets
+ensure_wasm_tools
 
 mkdir -p "$BIN_DIR"
 refresh_repo
@@ -471,13 +621,18 @@ CUDA_HOME="$(choose_cuda_home)"
 export CUDA_HOME
 export CUDA_PATH="$CUDA_HOME"
 
+detect_cuda_arch
+detect_cuda_version
+export CUDA_ARCH
+
 if detect_jetson; then
-    log "Detected Jetson platform: ${JETSON_MODEL:-aarch64}"
-    log "Using CUDA toolkit at $CUDA_HOME"
+    log "Platform : Jetson ${JETSON_MODEL} (aarch64)"
 else
-    log "Detected architecture: $ARCH"
-    log "Using CUDA toolkit at $CUDA_HOME"
+    log "Platform : $ARCH"
 fi
+log "CUDA home    : $CUDA_HOME"
+log "CUDA version : $CUDA_VERSION"
+log "CUDA arch(s) : $CUDA_ARCH"
 
 print_profile_header
 
