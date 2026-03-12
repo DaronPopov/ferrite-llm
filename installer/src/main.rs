@@ -193,7 +193,8 @@ fn main() {
 fn run() -> Result<(), DynError> {
     let args: Vec<String> = env::args().collect();
     let command = args.get(1).map(String::as_str).unwrap_or("plan");
-    let apply = args.iter().any(|arg| arg == "--apply");
+    let apply_flag = args.iter().any(|arg| arg == "--apply");
+    let apply = apply_flag || matches!(command, "bootstrap-host" | "bootstrap-all");
     let profile = args
         .windows(2)
         .find(|window| window[0] == "--profile")
@@ -1485,5 +1486,6 @@ fn print_help() {
     println!("ferrite-installer");
     println!("usage: cargo run --manifest-path installer/Cargo.toml -- <command> [--profile NAME] [--apply]");
     println!("commands: plan, resolve, materialize, bootstrap-host, fetch-sources, fetch-assets, generate-env, build-profile, validate-profile, bootstrap-all, detect, help");
+    println!("bootstrap-host and bootstrap-all provision missing host dependencies automatically.");
     println!("default profile auto-detects: jetson on aarch64 Jetson hosts, workstation-nvidia on linux/x86_64, cpu-only-dev otherwise");
 }
