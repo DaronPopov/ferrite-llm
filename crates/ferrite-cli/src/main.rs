@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
@@ -164,11 +165,14 @@ fn init_logging(verbose: u8) {
 
 fn delegate_to_runner(args: &[OsString]) -> Result<()> {
     if let Some(runner) = find_runner_binary() {
-        let status = ProcessCommand::new(&runner)
+        let mut command = ProcessCommand::new(&runner);
+        command
             .args(args)
             .stdin(Stdio::inherit())
             .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::inherit());
+        apply_native_runtime_env(&mut command, runner.parent());
+        let status = command
             .status()
             .with_context(|| format!("failed to launch runner {}", runner.display()))?;
         anyhow::ensure!(status.success(), "runner exited with status {status}");
@@ -215,6 +219,60 @@ fn find_runner_binary() -> Option<PathBuf> {
         return Some(direct);
     }
     None
+}
+
+fn apply_native_runtime_env(command: &mut ProcessCommand, runner_dir: Option<&Path>) {
+    let native_dirs = native_runtime_library_dirs(runner_dir);
+    if native_dirs.is_empty() {
+        return;
+    }
+
+    if let Ok(value) = std::env::join_paths(prepend_env_paths("LD_LIBRARY_PATH", &native_dirs)) {
+        command.env("LD_LIBRARY_PATH", value);
+    }
+}
+
+fn native_runtime_library_dirs(runner_dir: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+
+    if let Some(dir) = std::env::var_os("FERRITE_NATIVE_LIB_DIR").map(PathBuf::from) {
+        candidates.push(dir);
+    }
+
+    if let Some(runner_dir) = runner_dir {
+        candidates.push(runner_dir.join("lib"));
+        candidates.push(runner_dir.join("../share/ferrite/src/ferrite/ferrite-os/lib"));
+    }
+
+    if let Ok(Some(repo_root)) = find_repo_root() {
+        candidates.push(repo_root.join("ferrite-os/lib"));
+    }
+
+    if let Some(repo_root) = default_install_repo_root() {
+        candidates.push(repo_root.join("ferrite-os/lib"));
+    }
+
+    let mut seen = HashSet::new();
+    candidates
+        .into_iter()
+        .filter_map(|path| canonicalize_if_exists(path))
+        .filter(|path| seen.insert(path.clone()))
+        .collect()
+}
+
+fn canonicalize_if_exists(path: PathBuf) -> Option<PathBuf> {
+    if !path.is_dir() {
+        return None;
+    }
+    std::fs::canonicalize(path).ok()
+}
+
+fn prepend_env_paths(var: &str, extra_paths: &[PathBuf]) -> Vec<PathBuf> {
+    let mut paths = extra_paths.to_vec();
+    if let Some(existing) = std::env::var_os(var) {
+        paths.extend(std::env::split_paths(&existing));
+    }
+    paths
 }
 
 fn push_opt_flag(args: &mut Vec<OsString>, flag: &str, value: Option<OsString>) {
@@ -867,7 +925,11 @@ fn run_bootstrap_command(label: &str, program: &str, args: &[&str]) -> Result<()
 
 #[cfg(test)]
 mod tests {
-    use super::{built_in_model_catalog, check_model_cache, normalize_install_profile, DoctorStatus};
+    use super::{
+        built_in_model_catalog, check_model_cache, normalize_install_profile, prepend_env_paths,
+        DoctorStatus,
+    };
+    use std::path::PathBuf;
 
     #[test]
     fn normalize_install_profile_accepts_known_profiles() {
@@ -894,5 +956,23 @@ mod tests {
     fn built_in_model_catalog_parses_known_entry() {
         let models = built_in_model_catalog();
         assert!(models.iter().any(|model| model.name == "mistral-7b-q4"));
+    }
+
+    #[test]
+    fn prepend_env_paths_puts_new_entries_first() {
+        let extra = vec![PathBuf::from("/tmp/ferrite-lib")];
+        let joined = std::env::join_paths([PathBuf::from("/usr/lib"), PathBuf::from("/opt/lib")])
+            .unwrap();
+        std::env::set_var("FERRITE_TEST_PATHS", &joined);
+        let paths = prepend_env_paths("FERRITE_TEST_PATHS", &extra);
+        std::env::remove_var("FERRITE_TEST_PATHS");
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::from("/tmp/ferrite-lib"),
+                PathBuf::from("/usr/lib"),
+                PathBuf::from("/opt/lib")
+            ]
+        );
     }
 }
