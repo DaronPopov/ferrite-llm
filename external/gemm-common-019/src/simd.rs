@@ -1902,42 +1902,23 @@ pub mod aarch64 {
         *(&result as *const uint16x4_t).cast()
     }
 
-    #[target_feature(enable = "fullfp16")]
     #[inline]
     pub unsafe fn add_f16_fp16(a: u16, b: u16) -> u16 {
-        let result: u16;
-        asm!(
-        "fadd {0:h}, {1:h}, {2:h}",
-        out(vreg) result,
-        in(vreg) a,
-        in(vreg) b,
-        options(pure, nomem, nostack));
-        result
+        cast(f16::from_bits(a) + f16::from_bits(b))
     }
 
-    #[target_feature(enable = "fullfp16")]
     #[inline]
     pub unsafe fn fmaq_f16(mut a: u16, b: u16, c: u16) -> u16 {
-        asm!(
-        "fmadd {0:h}, {1:h}, {2:h}, {0:h}",
-        inout(vreg) a,
-        in(vreg) b,
-        in(vreg) c,
-        options(pure, nomem, nostack));
+        let acc = f16::from_bits(a).to_f32();
+        let lhs = f16::from_bits(b).to_f32();
+        let rhs = f16::from_bits(c).to_f32();
+        a = cast(f16::from_f32(lhs.mul_add(rhs, acc)));
         a
     }
 
-    #[target_feature(enable = "fullfp16")]
     #[inline]
     pub unsafe fn multiply_f16_fp16(a: u16, b: u16) -> u16 {
-        let result: u16;
-        asm!(
-        "fmul {0:h}, {1:h}, {2:h}",
-        out(vreg) result,
-        in(vreg) a,
-        in(vreg) b,
-        options(pure, nomem, nostack));
-        result
+        cast(f16::from_bits(a) * f16::from_bits(b))
     }
 
     #[allow(non_camel_case_types)]
@@ -1945,105 +1926,66 @@ pub mod aarch64 {
 
     /// Floating point multiplication
     /// [doc](https://developer.arm.com/documentation/dui0801/g/A64-SIMD-Vector-Instructions/FMUL--vector-)
-    #[target_feature(enable = "fullfp16,neon")]
     #[inline]
     pub unsafe fn vmulq_f16(a: float16x8_t, b: float16x8_t) -> float16x8_t {
-        let result: float16x8_t;
-        asm!(
-                "fmul {0:v}.8h, {1:v}.8h, {2:v}.8h",
-                out(vreg) result,
-                in(vreg) a,
-                in(vreg) b,
-                options(pure, nomem, nostack));
-        result
+        let a: [u16; 8] = transmute(a);
+        let b: [u16; 8] = transmute(b);
+        let mut out = [0u16; 8];
+        for i in 0..8 {
+            out[i] = cast(f16::from_bits(a[i]) * f16::from_bits(b[i]));
+        }
+        transmute(out)
     }
 
     /// Floating point addition
     /// [doc](https://developer.arm.com/documentation/dui0801/g/A64-SIMD-Vector-Instructions/FADD--vector-)
-    #[target_feature(enable = "fullfp16,neon")]
     #[inline]
     pub unsafe fn vaddq_f16(a: float16x8_t, b: float16x8_t) -> float16x8_t {
-        let result: float16x8_t;
-        asm!(
-                "fadd {0:v}.8h, {1:v}.8h, {2:v}.8h",
-                out(vreg) result,
-                in(vreg) a,
-                in(vreg) b,
-                options(pure, nomem, nostack));
-        result
+        let a: [u16; 8] = transmute(a);
+        let b: [u16; 8] = transmute(b);
+        let mut out = [0u16; 8];
+        for i in 0..8 {
+            out[i] = cast(f16::from_bits(a[i]) + f16::from_bits(b[i]));
+        }
+        transmute(out)
     }
 
     /// Fused multiply add [doc](https://developer.arm.com/documentation/dui0801/g/A64-SIMD-Vector-Instructions/FMLA--vector-)
-    #[target_feature(enable = "fullfp16,neon")]
     #[inline]
     pub unsafe fn vfmaq_f16(mut a: float16x8_t, b: float16x8_t, c: float16x8_t) -> float16x8_t {
-        asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.8h",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg) c,
-                options(pure, nomem, nostack));
+        let mut acc: [u16; 8] = transmute(a);
+        let lhs: [u16; 8] = transmute(b);
+        let rhs: [u16; 8] = transmute(c);
+        for i in 0..8 {
+            let acc_f = f16::from_bits(acc[i]).to_f32();
+            let lhs_f = f16::from_bits(lhs[i]).to_f32();
+            let rhs_f = f16::from_bits(rhs[i]).to_f32();
+            acc[i] = cast(f16::from_f32(lhs_f.mul_add(rhs_f, acc_f)));
+        }
+        a = transmute(acc);
         a
     }
 
-    #[target_feature(enable = "fullfp16,neon")]
     #[inline]
     pub unsafe fn vfmaq_laneq_f16<const LANE: i32>(
         mut a: float16x8_t,
         b: float16x8_t,
         c: float16x8_t,
     ) -> float16x8_t {
-        match LANE {
-            0 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[0]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
-            1 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[1]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
-            2 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[2]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
-            3 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[3]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
-            4 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[4]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
-            5 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[5]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
-            6 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[6]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
-            7 => asm!(
-                "fmla {0:v}.8h, {1:v}.8h, {2:v}.h[7]",
-                inout(vreg) a,
-                in(vreg) b,
-                in(vreg_low16) c,
-                options(pure, nomem, nostack)),
+        let mut acc: [u16; 8] = transmute(a);
+        let lhs: [u16; 8] = transmute(b);
+        let lanes: [u16; 8] = transmute(c);
+        let lane = match LANE {
+            0..=7 => lanes[LANE as usize],
             _ => unreachable!(),
+        };
+        let lane_f = f16::from_bits(lane).to_f32();
+        for i in 0..8 {
+            let acc_f = f16::from_bits(acc[i]).to_f32();
+            let lhs_f = f16::from_bits(lhs[i]).to_f32();
+            acc[i] = cast(f16::from_f32(lhs_f.mul_add(lane_f, acc_f)));
         }
+        a = transmute(acc);
         a
     }
 
@@ -2072,7 +2014,6 @@ pub mod aarch64 {
 
     impl Simd for NeonFp16 {
         #[inline]
-        #[target_feature(enable = "neon,fullfp16")]
         unsafe fn vectorize<F: NullaryFnOnce>(f: F) -> F::Output {
             f.call()
         }
@@ -2089,7 +2030,7 @@ pub mod aarch64 {
 
         #[inline]
         fn try_new() -> Option<Self> {
-            if crate::feature_detected!("neon") && crate::feature_detected!("fullfp16") {
+            if crate::feature_detected!("neon") && crate::feature_detected!("fp16") {
                 Some(Self { __private: () })
             } else {
                 None
@@ -2159,7 +2100,6 @@ pub mod aarch64 {
         #[inline(always)]
         fn vectorize<F: NullaryFnOnce>(self, f: F) -> F::Output {
             #[inline]
-            #[target_feature(enable = "neon,fullfp16")]
             unsafe fn implementation<F: NullaryFnOnce>(f: F) -> F::Output {
                 f.call()
             }
@@ -2194,7 +2134,7 @@ pub mod aarch64 {
 
         #[inline]
         fn try_new() -> Option<Self> {
-            if crate::feature_detected!("neon") && crate::feature_detected!("fullfp16") {
+            if crate::feature_detected!("neon") && crate::feature_detected!("fp16") {
                 Some(Self { __private: () })
             } else {
                 None
@@ -2264,7 +2204,6 @@ pub mod aarch64 {
         #[inline(always)]
         fn vectorize<F: NullaryFnOnce>(self, f: F) -> F::Output {
             #[inline]
-            #[target_feature(enable = "neon,fullfp16")]
             unsafe fn implementation<F: NullaryFnOnce>(f: F) -> F::Output {
                 f.call()
             }
