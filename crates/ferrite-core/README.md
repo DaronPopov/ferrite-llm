@@ -92,6 +92,12 @@ Smoke test:
 cargo run -p ferrite-core --features cuda --example ug-cuda-smoke
 ```
 
+Benchmark:
+
+```bash
+cargo run -p ferrite-core --features cuda --example ug-cuda-bench
+```
+
 ## License
 
 MIT

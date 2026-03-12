@@ -228,6 +228,12 @@ Ferrite also exposes `ug-cuda` directly for Rust-side tensor kernel generation a
 ```bash
 cargo run -p ferrite-core --features cuda --example ug-cuda-smoke
 ```
+
+Benchmark it with:
+
+```bash
+cargo run -p ferrite-core --features cuda --example ug-cuda-bench
+```
 - [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs)
 - [custom-attention-bench.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-attention-bench.rs)
 
