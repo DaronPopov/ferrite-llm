@@ -12,9 +12,10 @@ Ferrite splits model execution from guest logic:
 It now supports two explicit host backends:
 
 - `candle`: Ferrite's custom/native backend
-- `mistralrs`: broader GGUF model backend with true polling-based streaming
+- `mistralrs`: broader GGUF model backend
 
 Both backends can run on CUDA. They are backend implementations, not device modes.
+Both backends now support live polling-based streaming through the WASM generation handle.
 
 ## Install
 

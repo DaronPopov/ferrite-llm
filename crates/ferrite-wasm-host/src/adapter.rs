@@ -12,9 +12,9 @@ use mistralrs::{
     RequestBuilder, Response as MistralResponse, TextMessageRole, Usage,
     Device as MistralDevice,
 };
-use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Instant;
 
 /// Convert WIT GenerationConfig to ferrite's GenerationConfig
 pub fn wit_to_ferrite_config(wit_config: &WitGenConfig) -> ferrite_core::GenerationConfig {
@@ -419,7 +419,7 @@ impl MistralRsSession {
             }
         });
 
-        Ok(ActiveGeneration::MistralRs(MistralRsActiveGeneration { rx }))
+        Ok(ActiveGeneration::MistralRs(ChannelActiveGeneration { rx }))
     }
 }
 
@@ -434,11 +434,11 @@ enum StreamEvent {
     Error(String),
 }
 
-pub(crate) struct MistralRsActiveGeneration {
+pub(crate) struct ChannelActiveGeneration {
     rx: mpsc::Receiver<StreamEvent>,
 }
 
-impl MistralRsActiveGeneration {
+impl ChannelActiveGeneration {
     fn next_chunk(&mut self) -> Result<Option<String>, String> {
         match self.rx.recv() {
             Ok(StreamEvent::Chunk(chunk)) => Ok(Some(chunk)),
@@ -450,34 +450,22 @@ impl MistralRsActiveGeneration {
     }
 }
 
-pub(crate) enum BufferedGeneration {
-    Chunks(VecDeque<String>),
-}
-
-impl BufferedGeneration {
-    fn next_chunk(&mut self) -> Option<String> {
-        match self {
-            Self::Chunks(chunks) => chunks.pop_front(),
-        }
-    }
-}
-
 pub(crate) enum ActiveGeneration {
-    Buffered(BufferedGeneration),
-    MistralRs(MistralRsActiveGeneration),
+    Candle(ChannelActiveGeneration),
+    MistralRs(ChannelActiveGeneration),
 }
 
 impl ActiveGeneration {
     pub fn next_chunk(&mut self) -> Result<Option<String>, String> {
         match self {
-            Self::Buffered(buffered) => Ok(buffered.next_chunk()),
+            Self::Candle(stream) => stream.next_chunk(),
             Self::MistralRs(stream) => stream.next_chunk(),
         }
     }
 }
 
 enum BackendSession {
-    Candle(ferrite_core::ChatSession<DynamicModel>),
+    Candle(Arc<Mutex<ferrite_core::ChatSession<DynamicModel>>>),
     MistralRs(MistralRsSession),
 }
 
@@ -632,7 +620,7 @@ impl ModelAdapter {
                     }
                 };
 
-                BackendSession::Candle(
+                BackendSession::Candle(Arc::new(Mutex::new(
                     ferrite_core::ChatSession::new(
                         model,
                         Arc::clone(&tokenizer),
@@ -640,7 +628,7 @@ impl ModelAdapter {
                         config,
                     )
                     .map_err(|e| format!("Session creation failed: {}", e))?,
-                )
+                )))
             }
             BackendKind::MistralRs => BackendSession::MistralRs(
                 MistralRsSession::new(&downloaded, force_cpu)?,
@@ -742,6 +730,9 @@ impl ModelAdapter {
         tracing::debug!("🤖 Generating for: {}", prompt);
         match &mut self.session {
             BackendSession::Candle(session) => {
+                let mut session = session
+                    .lock()
+                    .map_err(|_| "candle session lock poisoned".to_string())?;
                 session.set_generation_config(config.clone());
                 session
                     .user_turn(prompt)
@@ -755,35 +746,12 @@ impl ModelAdapter {
     pub fn generate_stream(&mut self, prompt: &str, config: &ferrite_core::GenerationConfig)
         -> Result<Vec<String>, String>
     {
-        match &mut self.session {
-            BackendSession::Candle(session) => {
-                session.set_generation_config(config.clone());
-
-                let mut stream = session
-                    .user_turn_streaming(prompt)
-                    .map_err(|e| format!("Streaming generation failed: {}", e))?;
-
-                let mut chunks = Vec::new();
-                while let Some(chunk) = stream
-                    .next_chunk()
-                    .map_err(|e| format!("Streaming generation failed: {}", e))?
-                {
-                    if !chunk.is_empty() {
-                        chunks.push(chunk);
-                    }
-                }
-
-                Ok(chunks)
-            }
-            BackendSession::MistralRs(session) => {
-                let mut active = session.start_generate_stream(prompt, config)?;
-                let mut chunks = Vec::new();
-                while let Some(chunk) = active.next_chunk()? {
-                    chunks.push(chunk);
-                }
-                Ok(chunks)
-            }
+        let mut active = self.start_generate_stream(prompt, config)?;
+        let mut chunks = Vec::new();
+        while let Some(chunk) = active.next_chunk()? {
+            chunks.push(chunk);
         }
+        Ok(chunks)
     }
 
     pub(crate) fn start_generate_stream(
@@ -793,20 +761,50 @@ impl ModelAdapter {
     ) -> Result<ActiveGeneration, String> {
         match &mut self.session {
             BackendSession::Candle(session) => {
-                session.set_generation_config(config.clone());
-                let mut stream = session
-                    .user_turn_streaming(prompt)
-                    .map_err(|e| format!("Streaming generation failed: {}", e))?;
-                let mut chunks = VecDeque::new();
-                while let Some(chunk) = stream
-                    .next_chunk()
-                    .map_err(|e| format!("Streaming generation failed: {}", e))?
-                {
-                    if !chunk.is_empty() {
-                        chunks.push_back(chunk);
+                let (tx, rx) = mpsc::channel();
+                let session = Arc::clone(session);
+                let prompt = prompt.to_string();
+                let config = config.clone();
+
+                std::thread::spawn(move || {
+                    let send_result: Result<(), String> = (|| {
+                        let mut session = session
+                            .lock()
+                            .map_err(|_| "candle session lock poisoned".to_string())?;
+                        session.set_generation_config(config);
+                        let mut stream = session
+                            .user_turn_streaming(&prompt)
+                            .map_err(|e| format!("Streaming generation failed: {}", e))?;
+                        let start = Instant::now();
+
+                        while let Some(chunk) = stream
+                            .next_chunk()
+                            .map_err(|e| format!("Streaming generation failed: {}", e))?
+                        {
+                            if !chunk.is_empty() {
+                                tx.send(StreamEvent::Chunk(chunk)).ok();
+                            }
+                        }
+
+                        let generated_tokens = stream.generated_count();
+                        let elapsed = start.elapsed().as_secs_f32();
+                        if generated_tokens > 0 && elapsed > 0.0 {
+                            tx.send(StreamEvent::Stats(generated_tokens as f32 / elapsed)).ok();
+                        }
+                        Ok(())
+                    })();
+
+                    match send_result {
+                        Ok(()) => {
+                            tx.send(StreamEvent::Done).ok();
+                        }
+                        Err(err) => {
+                            tx.send(StreamEvent::Error(err)).ok();
+                        }
                     }
-                }
-                Ok(ActiveGeneration::Buffered(BufferedGeneration::Chunks(chunks)))
+                });
+
+                Ok(ActiveGeneration::Candle(ChannelActiveGeneration { rx }))
             }
             BackendSession::MistralRs(session) => session.start_generate_stream(prompt, config),
         }
