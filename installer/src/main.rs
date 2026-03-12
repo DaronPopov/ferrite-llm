@@ -642,7 +642,7 @@ fn build_profile(ctx: &InstallerContext) -> Result<(), DynError> {
     let workspace_build_cmd = if profile_needs_torch(ctx) {
         "cargo build --workspace"
     } else {
-        "cargo build --workspace --exclude ferrite-torch"
+        "cargo build --workspace --exclude ferrite-torch --exclude aten-ptx --exclude candle-ptx --exclude ferrite-gpu-lang"
     };
     run_shell_in_repo(
         repo_root,
@@ -700,7 +700,7 @@ fn validate_profile(ctx: &InstallerContext) -> Result<(), DynError> {
     let workspace_check_cmd = if profile_needs_torch(ctx) {
         "cargo check --workspace"
     } else {
-        "cargo check --workspace --exclude ferrite-torch"
+        "cargo check --workspace --exclude ferrite-torch --exclude aten-ptx --exclude candle-ptx --exclude ferrite-gpu-lang"
     };
     run_shell_in_repo(
         repo_root,
