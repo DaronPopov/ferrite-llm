@@ -14,7 +14,8 @@ resolver = "2"
 version = "0.3.0"
 edition = "2021"
 authors = ["DaronPopov"]
-repository = "https://github.com/DaronPopov/ferrite-llm"
+repository = "https://github.com/DaronPopov/ferrite"
+license = "LicenseRef-Proprietary"
 
 # Shared dependencies across workspace
 [workspace.dependencies]
