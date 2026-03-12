@@ -277,7 +277,18 @@ cuda_is_functional() {
     return 1
 }
 
+migrate_old_install() {
+    # Remove legacy ferrite-llm install path so a clean clone happens from the
+    # correct repo. Only removes if the NEW install root doesn't exist yet.
+    local old_root="$HOME/.local/share/ferrite-llm"
+    if [ -d "$old_root" ] && [ ! -d "$INSTALL_ROOT" ]; then
+        log "Removing legacy ferrite-llm install at $old_root"
+        rm -rf "$old_root"
+    fi
+}
+
 refresh_repo() {
+    migrate_old_install
     mkdir -p "$INSTALL_ROOT/src"
 
     if need_cmd git; then
