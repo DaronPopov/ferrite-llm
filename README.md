@@ -1,4 +1,4 @@
-# ferrite-llm
+# ferrite
 
 > **Copyright Daron Popov. All rights reserved.**  \
 > This source is viewable for reference only.  \
@@ -26,7 +26,7 @@ Both backends now support live polling-based streaming through the WASM generati
 The intended bootstrap path is a curl one-liner:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite-llm/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | bash
 ```
 
 That default path now builds the full Ferrite engine stack with the `mega`
@@ -42,18 +42,18 @@ Available installer profiles:
 Examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite-llm/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | \
   bash -s -- --profile full
 ```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite-llm/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | \
   bash -s -- --profile mega
 ```
 
 What the default one-line install now does:
 
-- clones or updates `ferrite-llm` into `~/.local/share/ferrite-llm/src/ferrite-llm`
+- clones or updates `ferrite` into `~/.local/share/ferrite/src/ferrite`
 - refreshes Cargo dependencies
 - builds `ferrite-os/lib/libptx_os.so`
 - builds the main `ferrite-llm` Rust workspace
@@ -90,7 +90,7 @@ Installer notes:
 
 - on `aarch64` Jetsons, the installer now detects the platform and prefers `/usr/local/cuda-arm64` when present
 - the install path is intended to work on desktop Linux and Jetson-class ARM Linux with CUDA already installed
-- set `FERRITE_ENABLE_TLSF_ALLOC=1` before running the installer if you want the runtime built with Ferrite's TLSF CUDA allocator hooks
+- TLSF allocator is built by default; set `FERRITE_ENABLE_TLSF_ALLOC=0` to skip it
 
 The installer stays in user space. It does not attempt `apt`, `dnf`, or system package changes.
 `FERRITE_BUILD_EVERYTHING` is still accepted for compatibility:
@@ -109,7 +109,7 @@ FERRITE_MODEL=qwen3-8b-q4 \
 FERRITE_REQUIRE_CUDA=1 \
 FERRITE_BACKEND=mistralrs \
 ferrite-rt run \
-  ~/.local/share/ferrite-llm/src/ferrite-llm/target/wasm32-wasip1/release/mistral_inference.component.wasm
+  ~/.local/share/ferrite/src/ferrite/target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```
 
 For local development from a repo checkout, prefer:
@@ -347,4 +347,4 @@ wasm-tools component new \
 
 ## Repository
 
-- Canonical repo: https://github.com/DaronPopov/ferrite-llm
+- Canonical repo: https://github.com/DaronPopov/ferrite
