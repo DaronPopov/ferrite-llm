@@ -125,20 +125,20 @@ That reports:
 - whether CUDA is required
 - whether TLSF allocator support was compiled into the runtime
 
-To build and run the Candle backend with TLSF allocator support locally:
+To build and run the runtime with TLSF allocator support locally:
 
 ```bash
 LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
 cargo run -p ferrite-cli --features tlsf-alloc -- info
 LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
 FERRITE_TLSF_ALLOC=1 \
-FERRITE_BACKEND=candle \
+FERRITE_BACKEND=mistralrs \
 FERRITE_REQUIRE_CUDA=1 \
 cargo run -p ferrite-cli --features tlsf-alloc -- \
   run target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```
 
-For installed binaries, build with `FERRITE_ENABLE_TLSF_ALLOC=1` during install. The installer copies `libptx_os.so` into `~/.local/lib`; add that directory to `LD_LIBRARY_PATH` before running the TLSF-enabled binary.
+This now patches both the native Ferrite/Candle CUDA path and the `mistralrs` CUDA stack. For installed binaries, build with `FERRITE_ENABLE_TLSF_ALLOC=1` during install. The installer copies `libptx_os.so` into `~/.local/lib`; add that directory to `LD_LIBRARY_PATH` before running the TLSF-enabled binary.
 
 ## Add A Model
 

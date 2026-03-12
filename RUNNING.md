@@ -173,9 +173,9 @@ Legacy compatibility:
 
 - `FERRITE_INFERENCE_BACKEND` is still accepted as an alias for `FERRITE_BACKEND`
 
-## Candle With TLSF Allocator
+## TLSF Allocator
 
-The main Candle backend can now be built with Ferrite's TLSF allocator hooks:
+The runtime can now be built with Ferrite's TLSF allocator hooks for both the native Ferrite/Candle path and the `mistralrs` CUDA stack:
 
 ```bash
 cargo run -p ferrite-cli --features tlsf-alloc -- info
@@ -188,7 +188,7 @@ LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRAR
 HF_TOKEN=your_token_here \
 FERRITE_MODEL=mistral-7b-q4 \
 FERRITE_REQUIRE_CUDA=1 \
-FERRITE_BACKEND=candle \
+FERRITE_BACKEND=mistralrs \
 FERRITE_TLSF_ALLOC=1 \
 cargo run -p ferrite-cli --features tlsf-alloc -- \
   run target/wasm32-wasip1/release/mistral_inference.component.wasm

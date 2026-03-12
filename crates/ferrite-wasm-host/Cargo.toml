@@ -20,6 +20,7 @@ ferrite-core = { path = "../ferrite-core", default-features = false }
 candle-core = "0.8"
 candle-transformers = "0.8"
 mistralrs = { version = "0.7", default-features = false }
+cudarc-mistral = { package = "cudarc", version = "0.19.3", optional = true, default-features = false }
 
 # Model downloading
 hf-hub = "0.4"
@@ -39,5 +40,5 @@ tracing = "0.1"
 
 [features]
 cuda = ["ferrite-core/cuda", "mistralrs/cuda"]
-tlsf-alloc = ["ferrite-core/tlsf-alloc", "cuda"]
+tlsf-alloc = ["ferrite-core/tlsf-alloc", "cuda", "cudarc-mistral/ptx-alloc"]
 default = ["cuda"]

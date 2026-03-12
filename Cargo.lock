@@ -1292,12 +1292,12 @@ dependencies = [
 [[package]]
 name = "cudarc"
 version = "0.19.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6468cb7fa330840f3ebcd8df51edc0e7bf5c18df524792ce6004c6821851cdf3"
 dependencies = [
  "float8 0.7.0",
  "half",
  "libloading 0.9.0",
+ "ptx-runtime",
+ "ptx-sys",
 ]
 
 [[package]]
@@ -2027,6 +2027,7 @@ dependencies = [
  "anyhow",
  "candle-core 0.8.4",
  "candle-transformers",
+ "cudarc 0.19.3",
  "dirs 5.0.1",
  "ferrite-core",
  "hf-hub 0.4.3",
