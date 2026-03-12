@@ -15,9 +15,6 @@ fn main() {
 
     if cuda_enabled {
         compile_cuda_kernels();
-    } else {
-        println!("cargo:warning=CUDA feature not enabled - custom kernels will not be compiled");
-        println!("cargo:warning=Enable with: cargo build --features cuda");
     }
 }
 
@@ -27,16 +24,12 @@ fn compile_cuda_kernels() {
 
     std::fs::create_dir_all(&kernel_output_dir).expect("Failed to create kernel output dir");
 
-    println!("cargo:warning=╔══════════════════════════════════════════════════════════════╗");
-    println!("cargo:warning=║  Compiling Custom CUDA Kernels                              ║");
-    println!("cargo:warning=╚══════════════════════════════════════════════════════════════╝");
-
     // Run the modular kernel build script
     let build_script = PathBuf::from("kernels/build_kernels.sh");
 
     if !build_script.exists() {
-        println!("cargo:warning=Build script not found: {:?}", build_script);
-        println!("cargo:warning=Skipping kernel compilation");
+        println!("cargo:rerun-if-env-changed=CUDA_HOME");
+        println!("cargo:rerun-if-env-changed=CUDA_PATH");
         return;
     }
 
@@ -52,8 +45,6 @@ fn compile_cuda_kernels() {
 
     match status {
         Ok(status) if status.success() => {
-            println!("cargo:warning=✓ Custom CUDA kernels compiled successfully");
-
             // Set environment variables for runtime
             println!(
                 "cargo:rustc-env=KERNEL_OUTPUT_DIR={}",

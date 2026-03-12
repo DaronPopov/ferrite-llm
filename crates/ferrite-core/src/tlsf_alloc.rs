@@ -23,6 +23,15 @@ fn env_usize(name: &str) -> Option<usize> {
 }
 
 #[cfg(feature = "tlsf-alloc")]
+fn env_bool(name: &str) -> Option<bool> {
+    std::env::var(name).ok().and_then(|value| match value.as_str() {
+        "1" | "true" | "True" | "TRUE" | "yes" | "YES" => Some(true),
+        "0" | "false" | "False" | "FALSE" | "no" | "NO" => Some(false),
+        _ => None,
+    })
+}
+
+#[cfg(feature = "tlsf-alloc")]
 fn prefer_orin_unified_memory() -> bool {
     env_enabled("FERRITE_TLSF_PREFER_ORIN_UM") || std::env::consts::ARCH == "aarch64"
 }
@@ -71,6 +80,18 @@ fn configured_max_pool_size_bytes() -> usize {
 }
 
 #[cfg(feature = "tlsf-alloc")]
+fn configured_enable_pool_health() -> bool {
+    env_bool("FERRITE_TLSF_ENABLE_POOL_HEALTH").unwrap_or(false)
+}
+
+#[cfg(feature = "tlsf-alloc")]
+fn configured_warning_threshold() -> f32 {
+    env_f32("FERRITE_TLSF_WARNING_THRESHOLD")
+        .filter(|value| *value > 0.0 && *value <= 1.0)
+        .unwrap_or(0.98)
+}
+
+#[cfg(feature = "tlsf-alloc")]
 pub fn maybe_enable_tlsf_allocator(device_id: i32) -> Result<()> {
     if !allocator_requested() {
         return Ok(());
@@ -88,6 +109,8 @@ pub fn maybe_enable_tlsf_allocator(device_id: i32) -> Result<()> {
     config.reserve_vram = configured_reserve_vram_bytes();
     config.prefer_orin_unified_memory = prefer_orin_unified_memory();
     config.quiet_init = !env_enabled("FERRITE_TLSF_VERBOSE");
+    config.enable_pool_health = configured_enable_pool_health();
+    config.warning_threshold = configured_warning_threshold();
 
     let runtime = ptx_runtime::PtxRuntime::with_config(device_id, Some(config))
         .map_err(|e| anyhow::anyhow!("Failed to initialize TLSF allocator runtime: {e}"))?;

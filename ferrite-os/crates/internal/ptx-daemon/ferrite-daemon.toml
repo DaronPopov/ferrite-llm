@@ -25,6 +25,10 @@ max_streams = 128
 # Fraction of available VRAM to use for memory pool
 pool_fraction = 0.25
 
+# Fixed VRAM pool size in bytes (default: 0 = disabled)
+# When non-zero, this overrides pool_fraction exactly.
+# fixed_pool_size_bytes = 104857600
+
 # Prefer Orin-specific unified-memory persistent scheduler path (default: false)
 prefer_orin_unified_memory = false
 
@@ -66,6 +70,9 @@ client_timeout_secs = 30
 # Skip TUI dashboard, run original headless behavior (default: false)
 # Also auto-enabled when stdout is not a TTY
 headless = false
+
+# Strictly reserve the main TLSF pool for the daemon (default: true)
+# single_pool_strict = true
 
 # GPU device name for TUI header display (default: "GPU {id}")
 # Set via FERRITE_GPU_NAME env var or nvidia-smi

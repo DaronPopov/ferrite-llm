@@ -613,7 +613,6 @@ fn run_bench<M: InferenceModel>(
     println!("╠═══════╬════════╬══════════╬═════════╬══════════╬═══════════════╣");
 
     let mut total_tokens = 0usize;
-    let mut total_decode_time = 0.0f64;
     let mut tps_values: Vec<f64> = Vec::new();
     let mut failures = 0usize;
 
@@ -626,7 +625,6 @@ fn run_bench<M: InferenceModel>(
         );
         if r.ok {
             total_tokens += r.tokens;
-            total_decode_time += r.elapsed_secs;
             tps_values.push(r.tps);
         } else {
             failures += 1;

@@ -142,6 +142,14 @@ make
 cargo build --release
 ```
 
+For iterative native runtime work, you can rebuild just the shared library:
+
+```bash
+make lib/libptx_os.so
+```
+
+That target now tracks native `.cu`, `.c`, `.h`, `.hpp`, and `.inl` inputs, so allocator and runtime include changes correctly trigger a rebuild.
+
 ### Verification
 
 ```bash
@@ -267,6 +275,7 @@ The Two-Level Segregated Fit allocator provides constant-time memory allocation 
 - Hash table for O(1) block lookup
 - Automatic defragmentation on free
 - Health monitoring and warning thresholds
+- Pool-health warnings are disabled by default for normal runtime use and can be re-enabled explicitly for allocator diagnostics
 - Memory leak detection via timestamps
 
 ### Stream Management System

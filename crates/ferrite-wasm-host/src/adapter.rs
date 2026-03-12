@@ -4,6 +4,9 @@
 //! Now uses the model registry for dynamic model loading.
 use candle_core::{quantized::gguf_file, Device, Tensor};
 use crate::bindings::WitGenConfig;
+use crate::hooks::ScriptHooks;
+use ferrite_gpu_lang::jit::JitEngine;
+use ferrite_gpu_lang::{GpuLangRuntime, HostTensor};
 use ferrite_core::registry::{
     ChatTemplate, DownloadedModel, ModelFamily, ModelLoader, ModelSpec,
 };
@@ -481,12 +484,87 @@ pub struct ModelAdapter {
     session: BackendSession,
 }
 
+struct ScriptLogitsHook {
+    hooks: ScriptHooks,
+    gpu_executor: Option<Mutex<GpuLogitsExecutor>>,
+}
+
+impl ferrite_core::LogitsHook for ScriptLogitsHook {
+    fn rewrite_top_logits(
+        &mut self,
+        candidates: &[ferrite_core::LogitsCandidate],
+        _generated_tokens: &[u32],
+    ) -> Result<Option<Vec<ferrite_core::LogitsCandidate>>, String> {
+        if let Some(executor) = &self.gpu_executor {
+            let mut executor = executor
+                .lock()
+                .map_err(|_| "gpu logits executor lock poisoned".to_string())?;
+            return executor.rewrite_candidates(candidates).map(Some);
+        }
+        self.hooks.apply_post_logits(candidates)
+    }
+}
+
+struct GpuLogitsExecutor {
+    jit: JitEngine,
+    runtime: GpuLangRuntime,
+    script: String,
+}
+
+impl GpuLogitsExecutor {
+    const WIDTH: usize = 16;
+
+    fn new(script: String) -> Result<Self, String> {
+        let mut jit = JitEngine::new();
+        jit.compile(&script)
+            .map_err(|e| format!("failed to compile ferrite-gpu-lang logits program: {e}"))?;
+        let runtime = GpuLangRuntime::new(0)
+            .map_err(|e| format!("failed to initialize ferrite-gpu-lang runtime: {e}"))?;
+        Ok(Self { jit, runtime, script })
+    }
+
+    fn rewrite_candidates(
+        &mut self,
+        candidates: &[ferrite_core::LogitsCandidate],
+    ) -> Result<Vec<ferrite_core::LogitsCandidate>, String> {
+        let script = self.script.clone();
+        let input = Self::candidates_to_tensor(candidates)?;
+        let compiled = self
+            .jit
+            .compile(&script)
+            .map_err(|e| format!("failed to compile ferrite-gpu-lang logits program: {e}"))?;
+        let output = self
+            .runtime
+            .execute(compiled, &[input])
+            .map_err(|e| format!("ferrite-gpu-lang logits execution failed: {e}"))?;
+
+        Ok(candidates
+            .iter()
+            .enumerate()
+            .map(|(idx, candidate)| ferrite_core::LogitsCandidate {
+                token_id: candidate.token_id,
+                logit: output.data()[idx],
+            })
+            .collect())
+    }
+
+    fn candidates_to_tensor(candidates: &[ferrite_core::LogitsCandidate]) -> Result<HostTensor, String> {
+        let mut data = vec![-1.0e9f32; Self::WIDTH];
+        for (idx, candidate) in candidates.iter().take(Self::WIDTH).enumerate() {
+            data[idx] = candidate.logit;
+        }
+        HostTensor::new(vec![1, 1, 1, Self::WIDTH], data)
+            .map_err(|e| format!("failed to prepare ferrite-gpu-lang logits tensor: {e}"))
+    }
+}
+
 impl ModelAdapter {
     /// Create a new model adapter using the registry
     pub fn new(
         model_name: String,
         model_cache: PathBuf,
         auth_token: Option<String>,
+        hooks: Option<ScriptHooks>,
     ) -> Result<Self, String> {
         tracing::info!("🔄 Initializing model: {}", model_name);
 
@@ -520,7 +598,7 @@ impl ModelAdapter {
             .map_err(|e| format!("Download failed: {}", e))?;
 
         // Load model based on family
-        Self::load_from_downloaded(downloaded, auth_token)
+        Self::load_from_downloaded(downloaded, auth_token, hooks)
     }
 
     /// Load a GGUF file directly with auto-detection
@@ -528,6 +606,7 @@ impl ModelAdapter {
         path: &Path,
         model_cache: PathBuf,
         auth_token: Option<String>,
+        hooks: Option<ScriptHooks>,
     ) -> Result<Self, String> {
         tracing::info!("🔄 Auto-loading GGUF: {}", path.display());
 
@@ -539,11 +618,15 @@ impl ModelAdapter {
 
         tracing::info!("✅ Detected: {:?} model", downloaded.family());
 
-        Self::load_from_downloaded(downloaded, auth_token)
+        Self::load_from_downloaded(downloaded, auth_token, hooks)
     }
 
     /// Load from a downloaded model
-    fn load_from_downloaded(downloaded: DownloadedModel, auth_token: Option<String>) -> Result<Self, String> {
+    fn load_from_downloaded(
+        downloaded: DownloadedModel,
+        auth_token: Option<String>,
+        hooks: Option<ScriptHooks>,
+    ) -> Result<Self, String> {
         ferrite_core::maybe_enable_tlsf_allocator(0)
             .map_err(|e| format!("TLSF allocator initialization failed: {e}"))?;
 
@@ -620,15 +703,28 @@ impl ModelAdapter {
                     }
                 };
 
-                BackendSession::Candle(Arc::new(Mutex::new(
-                    ferrite_core::ChatSession::new(
+                let mut chat_session = ferrite_core::ChatSession::new(
                         model,
                         Arc::clone(&tokenizer),
                         Some("You are a helpful AI assistant."),
                         config,
                     )
-                    .map_err(|e| format!("Session creation failed: {}", e))?,
-                )))
+                    .map_err(|e| format!("Session creation failed: {}", e))?;
+                if let Some(hooks) = hooks.clone() {
+                    let gpu_executor = if !force_cpu {
+                        match hooks.gpu_logits_program()? {
+                            Some(script) => Some(Mutex::new(GpuLogitsExecutor::new(script)?)),
+                            None => None,
+                        }
+                    } else {
+                        None
+                    };
+                    chat_session.set_logits_hook(Some(Box::new(ScriptLogitsHook {
+                        hooks,
+                        gpu_executor,
+                    })));
+                }
+                BackendSession::Candle(Arc::new(Mutex::new(chat_session)))
             }
             BackendKind::MistralRs => BackendSession::MistralRs(
                 MistralRsSession::new(&downloaded, force_cpu)?,

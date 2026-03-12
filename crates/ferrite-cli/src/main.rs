@@ -1,152 +1,124 @@
-//! Ferrite CLI - Standalone WASM Runtime for Neural Inference
-//!
-//! This is the command-line interface for running ferrite WASM modules.
-
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use ferrite_wasm_host::{HostState, bindings::FerriteGuest};
-use std::path::PathBuf;
+use std::ffi::OsString;
+use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
-use tracing::{info, warn, debug};
-use wasmtime::{
-    component::{Component, Linker},
-    Config, Engine, Store,
-};
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
+use tracing::warn;
 
-/// Ferrite WASM Runtime - Neural Inference OS
 #[derive(Parser, Debug)]
 #[command(name = "ferrite-rt")]
-#[command(version, about = "WASM runtime for neural inference")]
-#[command(long_about = "Production-ready neural inference runtime with WASM sandboxing")]
+#[command(version, about = "Ferrite CLI")]
+#[command(long_about = "Lightweight front-end for Ferrite runtime administration and dispatch")]
 struct Args {
-    /// Subcommand to execute
     #[command(subcommand)]
     command: Command,
 }
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Run a WASM module
     Run {
-        /// Path to the WASM module
         #[arg(value_name = "MODULE")]
         module: PathBuf,
-
-        /// Verbose logging (-v for info, -vv for debug, -vvv for trace)
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
-
-        /// Model cache directory
         #[arg(long, default_value = "./models", env = "FERRITE_MODEL_CACHE")]
         model_cache: PathBuf,
-
-        /// HuggingFace authentication token
         #[arg(long, env = "HF_TOKEN")]
         hf_token: Option<String>,
-
-        /// Show performance metrics after execution
         #[arg(long)]
         metrics: bool,
+        #[arg(long, env = "FERRITE_SCRIPT_HOOK")]
+        script_hook: Option<PathBuf>,
     },
-
-    /// List downloaded models in cache
     Models {
-        /// Show detailed model information
         #[arg(short, long)]
         detailed: bool,
-
-        /// Model cache directory
         #[arg(long, default_value = "./models", env = "FERRITE_MODEL_CACHE")]
         model_cache: PathBuf,
-
-        /// Verbose logging
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
     },
-
-    /// Show model cache information
     Cache {
-        /// Clear the model cache
         #[arg(long)]
         clear: bool,
-
-        /// Show cache statistics
         #[arg(long)]
         stats: bool,
-
-        /// Model cache directory
         #[arg(long, default_value = "./models", env = "FERRITE_MODEL_CACHE")]
         model_cache: PathBuf,
-
-        /// Verbose logging
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
     },
-
-    /// Show system information
     Info {
-        /// Verbose logging
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
     },
-
-    /// Install local prerequisites for building guest WASM modules
+    Doctor {
+        #[arg(long, default_value = "runtime", env = "FERRITE_INSTALL_PROFILE")]
+        profile: String,
+        #[arg(long)]
+        repo_root: Option<PathBuf>,
+        #[arg(long, default_value = "./models", env = "FERRITE_MODEL_CACHE")]
+        model_cache: PathBuf,
+        #[arg(long)]
+        strict: bool,
+        #[arg(short, long, action = clap::ArgAction::Count)]
+        verbose: u8,
+    },
     Setup {
-        /// Check prerequisites without installing anything
         #[arg(long)]
         check: bool,
-
-        /// Skip refreshing Cargo.lock to the newest compatible dependency versions
         #[arg(long)]
         skip_deps_update: bool,
-
-        /// Skip installing the wasm32-wasip1 Rust target
         #[arg(long)]
         skip_target: bool,
-
-        /// Skip installing the wasm-tools CLI
         #[arg(long)]
         skip_wasm_tools: bool,
-
-        /// Verbose logging
         #[arg(short, long, action = clap::ArgAction::Count)]
         verbose: u8,
     },
-}
-
-/// Runtime state that implements the host interface
-struct RuntimeState {
-    wasi: WasiCtx,
-    host: HostState,
-}
-
-impl WasiView for RuntimeState {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        &mut self.wasi
-    }
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        self.host.table()
-    }
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    // Execute the appropriate command
     match args.command {
-        Command::Run { module, verbose, model_cache, hf_token, metrics } => {
+        Command::Run {
+            module,
+            verbose,
+            model_cache,
+            hf_token,
+            metrics,
+            script_hook,
+        } => {
             init_logging(verbose);
-            if let Some(ref token) = hf_token {
-                debug!("🔑 Using HuggingFace token from CLI/env (length: {})", token.len());
+            let mut runner_args = vec![OsString::from("run"), module.into_os_string()];
+            push_count_flag(&mut runner_args, "--verbose", verbose);
+            push_opt_flag(&mut runner_args, "--model-cache", Some(model_cache.into_os_string()));
+            push_opt_flag(&mut runner_args, "--hf-token", hf_token.map(OsString::from));
+            if metrics {
+                runner_args.push(OsString::from("--metrics"));
             }
-            run_module(&module, &model_cache, metrics)
+            push_opt_flag(
+                &mut runner_args,
+                "--script-hook",
+                script_hook.map(|path| path.into_os_string()),
+            );
+            delegate_to_runner(&runner_args)
         }
-        Command::Models { detailed, model_cache, verbose } => {
+        Command::Models {
+            detailed,
+            model_cache,
+            verbose,
+        } => {
             init_logging(verbose);
             list_models(&model_cache, detailed)
         }
-        Command::Cache { clear, stats, model_cache, verbose } => {
+        Command::Cache {
+            clear,
+            stats,
+            model_cache,
+            verbose,
+        } => {
             init_logging(verbose);
             manage_cache(&model_cache, clear, stats)
         }
@@ -154,7 +126,23 @@ fn main() -> Result<()> {
             init_logging(verbose);
             show_info()
         }
-        Command::Setup { check, skip_deps_update, skip_target, skip_wasm_tools, verbose } => {
+        Command::Doctor {
+            profile,
+            repo_root,
+            model_cache,
+            strict,
+            verbose,
+        } => {
+            init_logging(verbose);
+            run_doctor(&profile, repo_root.as_deref(), &model_cache, strict)
+        }
+        Command::Setup {
+            check,
+            skip_deps_update,
+            skip_target,
+            skip_wasm_tools,
+            verbose,
+        } => {
             init_logging(verbose);
             setup_wasm_toolchain(check, skip_deps_update, skip_target, skip_wasm_tools)
         }
@@ -174,182 +162,139 @@ fn init_logging(verbose: u8) {
         .init();
 }
 
-fn run_module(module: &PathBuf, model_cache: &PathBuf, metrics: bool) -> Result<()> {
-    info!("🔥 Ferrite Runtime v{}", env!("CARGO_PKG_VERSION"));
-    info!("📦 Loading WASM module: {}", module.display());
-
-    let start_time = std::time::Instant::now();
-
-    // Configure wasmtime engine with component model
-    let mut config = Config::new();
-    config.wasm_component_model(true);
-    config.async_support(false);
-
-    let engine = Engine::new(&config)?;
-
-    // Load the WASM component
-    let component = Component::from_file(&engine, module)
-        .with_context(|| format!("Failed to load WASM module: {}", module.display()))?;
-
-    info!("✅ Component loaded ({:.2}s)", start_time.elapsed().as_secs_f32());
-
-    // Create linker and add host functions
-    let mut linker = Linker::new(&engine);
-
-    // Add WASI support
-    wasmtime_wasi::add_to_linker_sync(&mut linker)?;
-
-    // Add ferrite host functions
-    FerriteGuest::add_to_linker(&mut linker, |state: &mut RuntimeState| &mut state.host)?;
-
-    debug!("✅ Host functions linked");
-
-    // Create store with runtime state
-    let wasi = WasiCtxBuilder::new()
-        .inherit_stdio()
-        .inherit_env()
-        .build();
-
-    let host = HostState::new(model_cache.clone())?;
-
-    let mut store = Store::new(&engine, RuntimeState { wasi, host });
-
-    // Instantiate the component
-    let guest = FerriteGuest::instantiate(&mut store, &component, &linker)?;
-
-    debug!("✅ Module instantiated");
-    info!("▶️  Executing guest module...\n");
-
-    let exec_start = std::time::Instant::now();
-
-    // Call the guest's run() function
-    let result = match guest.call_run(&mut store) {
-        Ok(Ok(())) => {
-            info!("\n✅ Module executed successfully");
-            Ok(())
-        }
-        Ok(Err(e)) => {
-            warn!("❌ Module returned error: {}", e);
-            anyhow::bail!("Guest module failed: {}", e)
-        }
-        Err(e) => {
-            warn!("❌ Runtime error: {}", e);
-            Err(e)
-        }
-    };
-
-    if metrics {
-        let total_time = start_time.elapsed().as_secs_f32();
-        let exec_time = exec_start.elapsed().as_secs_f32();
-        println!("\n📊 Performance Metrics:");
-        println!("   Total time:     {:.2}s", total_time);
-        println!("   Execution time: {:.2}s", exec_time);
-        println!("   Startup time:   {:.2}s", total_time - exec_time);
+fn delegate_to_runner(args: &[OsString]) -> Result<()> {
+    if let Some(runner) = find_runner_binary() {
+        let status = ProcessCommand::new(&runner)
+            .args(args)
+            .stdin(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .status()
+            .with_context(|| format!("failed to launch runner {}", runner.display()))?;
+        anyhow::ensure!(status.success(), "runner exited with status {status}");
+        return Ok(());
     }
 
-    result
+    let repo_root = find_repo_root()?
+        .ok_or_else(|| anyhow::anyhow!("runner binary not found and repo root could not be inferred"))?;
+    anyhow::ensure!(
+        command_exists("cargo"),
+        "runner binary not found and cargo is unavailable for repo fallback"
+    );
+
+    let features = std::env::var("FERRITE_RUNNER_FEATURES")
+        .unwrap_or_else(|_| "runtime,cuda".to_string());
+    let mut command = ProcessCommand::new("cargo");
+    command
+        .current_dir(repo_root)
+        .arg("run")
+        .arg("-p")
+        .arg("ferrite-cli")
+        .arg("--bin")
+        .arg("ferrite-rt-runner")
+        .arg("--features")
+        .arg(features)
+        .arg("--")
+        .args(args)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit());
+
+    let status = command
+        .status()
+        .context("failed to launch cargo fallback runner")?;
+    anyhow::ensure!(status.success(), "runner fallback exited with status {status}");
+    Ok(())
 }
 
-fn list_models(_model_cache: &PathBuf, detailed: bool) -> Result<()> {
-    // Show available models from registry
-    let catalog = ferrite_wasm_host::ferrite_core::Catalog::new();
-
-    println!("📚 Available Models ({} in registry):\n", catalog.len());
-
-    for spec in catalog.list() {
-        if detailed {
-            println!("  {} [{}]", spec.name, spec.size);
-            println!("    Family: {:?}", spec.family);
-            println!("    Format: {:?}", spec.format);
-            println!("    Context: {} tokens", spec.context_length);
-            println!("    Auth required: {}", if spec.requires_auth { "yes" } else { "no" });
-            println!("    {}\n", spec.description);
-        } else {
-            let auth_marker = if spec.requires_auth { " 🔑" } else { "" };
-            println!("  {:30} {:6}  {}{}", spec.name, spec.size, spec.description, auth_marker);
-        }
+fn find_runner_binary() -> Option<PathBuf> {
+    let current = std::env::current_exe().ok()?;
+    let dir = current.parent()?;
+    let direct = dir.join("ferrite-rt-runner");
+    if direct.is_file() {
+        return Some(direct);
     }
+    None
+}
 
-    println!();
-
-    // Check HuggingFace cache for downloaded models
-    if let Some(home) = dirs::home_dir() {
-        let hf_cache = home.join(".cache/huggingface/hub");
-        if hf_cache.exists() {
-            println!("📥 Downloaded Models (in HF cache):\n");
-
-            let entries = std::fs::read_dir(&hf_cache)?;
-            let mut count = 0;
-
-            for entry in entries {
-                let entry = entry?;
-                let path = entry.path();
-                if path.is_dir() {
-                    let name = path.file_name().unwrap().to_string_lossy();
-                    if name.starts_with("models--") {
-                        count += 1;
-                        let model_name = name.replace("models--", "").replace("--", "/");
-                        println!("  • {}", model_name);
-
-                        if detailed {
-                            println!("    Path: {}", path.display());
-                            if let Ok(size) = get_dir_size(&path) {
-                                println!("    Size: {}", format_size(size));
-                            }
-                        }
-                    }
-                }
-            }
-
-            if count == 0 {
-                println!("  (no models found)");
-            } else {
-                println!("\n📊 Total models: {}", count);
-            }
-        }
+fn push_opt_flag(args: &mut Vec<OsString>, flag: &str, value: Option<OsString>) {
+    if let Some(value) = value {
+        args.push(OsString::from(flag));
+        args.push(value);
     }
+}
 
-    Ok(())
+fn push_count_flag(args: &mut Vec<OsString>, flag: &str, count: u8) {
+    for _ in 0..count {
+        args.push(OsString::from(flag));
+    }
 }
 
 fn manage_cache(model_cache: &PathBuf, clear: bool, stats: bool) -> Result<()> {
     if stats {
-        println!("📊 Cache Statistics:");
-        println!("   Cache directory: {}", model_cache.display());
+        println!("Cache Statistics:");
+        println!("  Cache directory: {}", model_cache.display());
 
         if model_cache.exists() {
             match get_dir_size(model_cache) {
-                Ok(size) => println!("   Local cache size: {}", format_size(size)),
-                Err(e) => warn!("   Could not calculate cache size: {}", e),
+                Ok(size) => println!("  Local cache size: {}", format_size(size)),
+                Err(e) => warn!("  Could not calculate cache size: {}", e),
             }
         } else {
-            println!("   Local cache: (empty)");
+            println!("  Local cache: (empty)");
         }
 
-        // Show HF cache stats
         if let Some(home) = dirs::home_dir() {
             let hf_cache = home.join(".cache/huggingface/hub");
             if hf_cache.exists() {
                 match get_dir_size(&hf_cache) {
-                    Ok(size) => println!("   HuggingFace cache: {}", format_size(size)),
-                    Err(e) => warn!("   Could not calculate HF cache size: {}", e),
+                    Ok(size) => println!("  HuggingFace cache: {}", format_size(size)),
+                    Err(e) => warn!("  Could not calculate HF cache size: {}", e),
                 }
             }
         }
     }
 
     if clear {
-        println!("🗑️  Clearing cache...");
+        println!("Clearing cache...");
 
         if model_cache.exists() {
             std::fs::remove_dir_all(model_cache)?;
-            println!("✅ Cleared local cache: {}", model_cache.display());
+            println!("Cleared local cache: {}", model_cache.display());
         }
 
-        println!("\n⚠️  HuggingFace cache not cleared (managed by hf-hub)");
-        println!("   To clear HF cache manually, delete: ~/.cache/huggingface/hub");
+        println!("\nHuggingFace cache not cleared (managed by hf-hub)");
+        println!("To clear HF cache manually, delete: ~/.cache/huggingface/hub");
     }
 
+    Ok(())
+}
+
+fn list_models(_model_cache: &PathBuf, detailed: bool) -> Result<()> {
+    let models = built_in_model_catalog();
+    println!("Available Models ({} in registry):\n", models.len());
+
+    for model in &models {
+        if detailed {
+            println!("  {} [{}]", model.name, model.size);
+            println!("    Family: {}", model.family);
+            println!("    Format: {}", model.format);
+            println!("    Context: {} tokens", model.context_length);
+            println!(
+                "    Auth required: {}",
+                if model.requires_auth { "yes" } else { "no" }
+            );
+            println!("    {}\n", model.description);
+        } else {
+            let auth_marker = if model.requires_auth { " 🔑" } else { "" };
+            println!(
+                "  {:30} {:6}  {}{}",
+                model.name, model.size, model.description, auth_marker
+            );
+        }
+    }
+
+    println!();
     Ok(())
 }
 
@@ -373,9 +318,17 @@ fn setup_wasm_toolchain(
         "required to install the wasm32-wasip1 target",
     );
     print_status("cargo", cargo_available, "required to install wasm-tools");
-    print_status("wasm32-wasip1 target", target_installed, "Rust stdlib for WASI Preview 1");
+    print_status(
+        "wasm32-wasip1 target",
+        target_installed,
+        "Rust stdlib for WASI Preview 1",
+    );
     print_status("wasm-tools", wasm_tools_installed, "used for component embed/new");
-    print_status("cargo dependency refresh", !skip_deps_update, "runs `cargo update` before rebuilding");
+    print_status(
+        "cargo dependency refresh",
+        !skip_deps_update,
+        "runs `cargo update` before rebuilding",
+    );
 
     if check {
         if (!skip_target && !target_installed) || (!skip_wasm_tools && !wasm_tools_installed) {
@@ -410,77 +363,435 @@ fn setup_wasm_toolchain(
 }
 
 fn show_info() -> Result<()> {
-    println!("🔥 Ferrite Runtime - Neural Inference OS");
-    println!("   Version: {}", env!("CARGO_PKG_VERSION"));
-    println!("   Homepage: {}", env!("CARGO_PKG_HOMEPAGE"));
+    println!("Ferrite Runtime");
+    println!("  Version: {}", env!("CARGO_PKG_VERSION"));
+    println!("  Homepage: {}", env!("CARGO_PKG_HOMEPAGE"));
     println!();
-    println!("📦 Components:");
-    println!("   • ferrite-core: Pure inference engine");
-    println!("   • ferrite-wasm-host: WASM orchestration");
-    println!("   • ferrite-sdk: Guest SDK for WASM modules");
-    println!();
-    println!("🔧 System:");
-    println!("   • OS: {}", std::env::consts::OS);
-    println!("   • Arch: {}", std::env::consts::ARCH);
-
-    // Check CUDA availability
-    #[cfg(feature = "cuda")]
-    {
-        use candle_core::Device;
-        match Device::cuda_if_available(0) {
-            Ok(Device::Cuda(_)) => println!("   • CUDA: ✅ Available"),
-            _ => println!("   • CUDA: ❌ Not available"),
+    println!("System:");
+    println!("  OS: {}", std::env::consts::OS);
+    println!("  Arch: {}", std::env::consts::ARCH);
+    println!(
+        "  nvidia-smi: {}",
+        if command_exists("nvidia-smi") {
+            "available"
+        } else {
+            "missing"
         }
-    }
-    #[cfg(not(feature = "cuda"))]
-    {
-        println!("   • CUDA: ❌ Not compiled with CUDA support");
-    }
+    );
+    println!(
+        "  runner binary: {}",
+        find_runner_binary()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "(not installed beside ferrite-rt)".to_string())
+    );
 
     let backend = std::env::var("FERRITE_BACKEND")
         .ok()
         .or_else(|| std::env::var("FERRITE_INFERENCE_BACKEND").ok())
         .unwrap_or_else(|| "auto".to_string());
-    println!("   • Backend policy: {}", backend);
-    println!("   • Require CUDA: {}", if std::env::var("FERRITE_REQUIRE_CUDA").ok().as_deref() == Some("1") { "yes" } else { "no" });
-    #[cfg(feature = "tlsf-alloc")]
-    {
-        println!("   • TLSF allocator support: compiled");
-        println!(
-            "   • TLSF allocator enabled: {}",
-            if matches!(
-                std::env::var("FERRITE_TLSF_ALLOC").ok().as_deref(),
-                Some("1" | "true" | "TRUE" | "True")
-            ) {
-                "yes"
-            } else {
-                "no"
-            }
-        );
-    }
-    #[cfg(not(feature = "tlsf-alloc"))]
-    {
-        println!("   • TLSF allocator support: not compiled");
-    }
-
-    println!();
-
-    // Show model registry info
-    let catalog = ferrite_wasm_host::ferrite_core::Catalog::new();
-    println!("📚 Model Registry: {} models available", catalog.len());
-    println!("   Families: Llama, Mistral, Qwen, Phi, Gemma, CodeLlama");
-    println!("   Formats: GGUF (quantized), SafeTensors");
-    println!("   Run 'ferrite-rt models' to list all");
-
-    println!();
-    println!("🌐 Interfaces:");
-    println!("   • WIT (WebAssembly Interface Types)");
-    println!("   • WASI (WebAssembly System Interface)");
+    println!("  Backend policy: {}", backend);
+    println!(
+        "  Require CUDA: {}",
+        if std::env::var("FERRITE_REQUIRE_CUDA").ok().as_deref() == Some("1") {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+    println!(
+        "  Runner fallback features: {}",
+        std::env::var("FERRITE_RUNNER_FEATURES").unwrap_or_else(|_| "runtime,cuda".to_string())
+    );
 
     Ok(())
 }
 
-// Helper functions
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum DoctorStatus {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl DoctorStatus {
+    fn label(self) -> &'static str {
+        match self {
+            Self::Pass => "PASS",
+            Self::Warn => "WARN",
+            Self::Fail => "FAIL",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct DoctorCheck {
+    name: String,
+    status: DoctorStatus,
+    detail: String,
+}
+
+impl DoctorCheck {
+    fn pass(name: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self { name: name.into(), status: DoctorStatus::Pass, detail: detail.into() }
+    }
+
+    fn warn(name: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self { name: name.into(), status: DoctorStatus::Warn, detail: detail.into() }
+    }
+
+    fn fail(name: impl Into<String>, detail: impl Into<String>) -> Self {
+        Self { name: name.into(), status: DoctorStatus::Fail, detail: detail.into() }
+    }
+}
+
+#[derive(Debug)]
+struct DoctorReport {
+    checks: Vec<DoctorCheck>,
+}
+
+impl DoctorReport {
+    fn new() -> Self {
+        Self { checks: Vec::new() }
+    }
+
+    fn push(&mut self, check: DoctorCheck) {
+        self.checks.push(check);
+    }
+
+    fn failures(&self) -> usize {
+        self.checks.iter().filter(|check| check.status == DoctorStatus::Fail).count()
+    }
+
+    fn warnings(&self) -> usize {
+        self.checks.iter().filter(|check| check.status == DoctorStatus::Warn).count()
+    }
+
+    fn print(&self, profile: &str, repo_root: Option<&Path>) {
+        println!("Ferrite doctor");
+        println!("==============");
+        println!("profile    {}", profile);
+        println!(
+            "repo root   {}",
+            repo_root
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|| "(not found)".to_string())
+        );
+        println!();
+
+        for check in &self.checks {
+            println!("{:20} {:5} {}", check.name, check.status.label(), check.detail);
+        }
+
+        println!();
+        println!(
+            "summary     {} pass  {} warn  {} fail",
+            self.checks.len().saturating_sub(self.warnings() + self.failures()),
+            self.warnings(),
+            self.failures()
+        );
+    }
+}
+
+fn run_doctor(profile: &str, repo_root: Option<&Path>, model_cache: &Path, strict: bool) -> Result<()> {
+    let profile = normalize_install_profile(profile)?;
+    let repo_root = repo_root
+        .map(PathBuf::from)
+        .or_else(|| find_repo_root().ok().flatten())
+        .or_else(default_install_repo_root);
+
+    let mut report = DoctorReport::new();
+    report.push(check_command("cargo", true, "required for workspace builds and setup"));
+    report.push(check_command("rustup", true, "required for wasm target installation"));
+    report.push(check_command("wasm-tools", true, "required for component embedding"));
+    report.push(check_command("git", false, "recommended for repo updates"));
+    report.push(check_either_command(&["curl", "wget"], true, "required for bootstrap downloads"));
+
+    let rustup_available = command_exists("rustup");
+    match rustup_available {
+        true => match rustup_target_installed("wasm32-wasip1") {
+            Ok(true) => report.push(DoctorCheck::pass("wasm target", "wasm32-wasip1 installed")),
+            Ok(false) => report.push(DoctorCheck::fail("wasm target", "missing wasm32-wasip1; run `ferrite-rt setup`")),
+            Err(err) => report.push(DoctorCheck::fail("wasm target", format!("unable to query rustup targets: {err}"))),
+        },
+        false => report.push(DoctorCheck::fail("wasm target", "cannot verify without rustup in PATH")),
+    }
+
+    report.push(check_model_cache(model_cache));
+    report.push(check_runtime_binary());
+    report.push(check_runner_availability());
+    report.push(check_cuda_runtime());
+
+    if let Some(repo_root) = repo_root.as_deref() {
+        add_repo_checks(&mut report, repo_root, profile);
+    } else {
+        report.push(DoctorCheck::warn(
+            "repo layout",
+            "repo root not found; skipped artifact validation",
+        ));
+    }
+
+    report.print(profile, repo_root.as_deref());
+
+    let failures = report.failures();
+    let warnings = report.warnings();
+    if failures > 0 {
+        anyhow::bail!("doctor found {failures} failing check(s)");
+    }
+    if strict && warnings > 0 {
+        anyhow::bail!("doctor found {warnings} warning(s) in strict mode");
+    }
+
+    Ok(())
+}
+
+fn normalize_install_profile(profile: &str) -> Result<&'static str> {
+    match profile {
+        "runtime" => Ok("runtime"),
+        "platform" => Ok("platform"),
+        "full" => Ok("full"),
+        "mega" => Ok("mega"),
+        other => anyhow::bail!("unknown install profile `{other}`"),
+    }
+}
+
+fn find_repo_root() -> Result<Option<PathBuf>> {
+    let current = std::env::current_dir().context("failed to read current directory")?;
+    Ok(current
+        .ancestors()
+        .find(|path| path.join("install.sh").is_file() && path.join("Cargo.toml").is_file())
+        .map(Path::to_path_buf))
+}
+
+fn default_install_repo_root() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".local/share/ferrite-llm/src/ferrite-llm"))
+}
+
+fn add_repo_checks(report: &mut DoctorReport, repo_root: &Path, profile: &str) {
+    report.push(check_path_exists(
+        "install script",
+        &repo_root.join("install.sh"),
+        true,
+        "installer entrypoint",
+    ));
+    report.push(check_path_exists(
+        "workspace root",
+        &repo_root.join("Cargo.toml"),
+        true,
+        "root Cargo workspace manifest",
+    ));
+    report.push(check_path_exists(
+        "native runtime",
+        &repo_root.join("ferrite-os/lib/libptx_os.so"),
+        true,
+        "native PTX runtime library",
+    ));
+    report.push(check_path_exists(
+        "sample wasm",
+        &repo_root.join("target/wasm32-wasip1/release/mistral_inference.component.wasm"),
+        true,
+        "sample guest component",
+    ));
+
+    if matches!(profile, "platform" | "full" | "mega") {
+        report.push(check_path_exists(
+            "platform src",
+            &repo_root.join("ferrite-os/Cargo.toml"),
+            true,
+            "ferrite-os workspace manifest",
+        ));
+    }
+
+    if matches!(profile, "full" | "mega") {
+        report.push(check_path_exists(
+            "gpu-lang src",
+            &repo_root.join("ferrite-gpu-lang/Cargo.toml"),
+            true,
+            "ferrite-gpu-lang manifest",
+        ));
+    }
+
+    if profile == "mega" {
+        report.push(check_command("cmake", true, "required for ferrite-graphics"));
+        report.push(check_command("ctest", true, "required for ferrite-graphics tests"));
+        report.push(check_command("ffmpeg", true, "required for ferrite-graphics workflows"));
+        report.push(check_path_exists(
+            "graphics src",
+            &repo_root.join("external/ferrite-graphics/CMakeLists.txt"),
+            true,
+            "ferrite-graphics CMake project",
+        ));
+    }
+}
+
+fn check_command(name: &str, required: bool, detail: &str) -> DoctorCheck {
+    if command_exists(name) {
+        DoctorCheck::pass(name, detail)
+    } else if required {
+        DoctorCheck::fail(name, format!("missing; {detail}"))
+    } else {
+        DoctorCheck::warn(name, format!("missing; {detail}"))
+    }
+}
+
+fn check_either_command(names: &[&str], required: bool, detail: &str) -> DoctorCheck {
+    if let Some(found) = names.iter().copied().find(|name| command_exists(name)) {
+        DoctorCheck::pass(found, detail)
+    } else if required {
+        DoctorCheck::fail(names.join("/"), format!("missing; {detail}"))
+    } else {
+        DoctorCheck::warn(names.join("/"), format!("missing; {detail}"))
+    }
+}
+
+fn check_path_exists(name: &str, path: &Path, required: bool, detail: &str) -> DoctorCheck {
+    if path.exists() {
+        DoctorCheck::pass(name, format!("{} ({detail})", path.display()))
+    } else if required {
+        DoctorCheck::fail(name, format!("missing {} ({detail})", path.display()))
+    } else {
+        DoctorCheck::warn(name, format!("missing {} ({detail})", path.display()))
+    }
+}
+
+fn check_model_cache(model_cache: &Path) -> DoctorCheck {
+    if model_cache.exists() {
+        if model_cache.is_dir() {
+            DoctorCheck::pass("model cache", format!("{} exists", model_cache.display()))
+        } else {
+            DoctorCheck::fail("model cache", format!("{} exists but is not a directory", model_cache.display()))
+        }
+    } else if let Some(parent) = model_cache.parent() {
+        if parent.exists() {
+            DoctorCheck::warn("model cache", format!("{} missing; parent exists so runtime can create it", model_cache.display()))
+        } else {
+            DoctorCheck::fail(
+                "model cache",
+                format!("{} missing and parent {} does not exist", model_cache.display(), parent.display()),
+            )
+        }
+    } else {
+        DoctorCheck::fail("model cache", format!("{} has no valid parent directory", model_cache.display()))
+    }
+}
+
+fn check_runtime_binary() -> DoctorCheck {
+    match std::env::current_exe() {
+        Ok(path) => DoctorCheck::pass("runtime bin", format!("{}", path.display())),
+        Err(err) => DoctorCheck::warn("runtime bin", format!("unable to resolve current executable: {err}")),
+    }
+}
+
+fn check_runner_availability() -> DoctorCheck {
+    if let Some(path) = find_runner_binary() {
+        DoctorCheck::pass("runner bin", format!("{}", path.display()))
+    } else if find_repo_root().ok().flatten().is_some() {
+        DoctorCheck::warn("runner bin", "not installed beside ferrite-rt; repo cargo fallback will be used")
+    } else {
+        DoctorCheck::fail("runner bin", "ferrite-rt-runner not found beside ferrite-rt")
+    }
+}
+
+fn check_cuda_runtime() -> DoctorCheck {
+    if command_exists("nvidia-smi") {
+        DoctorCheck::pass("cuda runtime", "`nvidia-smi` is available")
+    } else {
+        DoctorCheck::warn("cuda runtime", "`nvidia-smi` is missing; CUDA execution may be unavailable")
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ModelEntry {
+    name: String,
+    family: String,
+    format: String,
+    context_length: usize,
+    description: String,
+    size: String,
+    requires_auth: bool,
+}
+
+fn built_in_model_catalog() -> Vec<ModelEntry> {
+    let source = include_str!("../../ferrite-core/src/registry/catalog.rs");
+    let mut models = Vec::new();
+    let mut current = Vec::new();
+    let mut in_spec = false;
+
+    for line in source.lines() {
+        let trimmed = line.trim();
+        if trimmed == "self.register(ModelSpec {" {
+            in_spec = true;
+            current.clear();
+            continue;
+        }
+
+        if in_spec && trimmed == "});" {
+            if let Some(model) = parse_model_entry(&current) {
+                models.push(model);
+            }
+            in_spec = false;
+            continue;
+        }
+
+        if in_spec {
+            current.push(trimmed.to_string());
+        }
+    }
+
+    models.sort_by(|a, b| a.name.cmp(&b.name));
+    models
+}
+
+fn parse_model_entry(lines: &[String]) -> Option<ModelEntry> {
+    Some(ModelEntry {
+        name: parse_string_field(lines, "name")?,
+        family: parse_enum_field(lines, "family")?,
+        format: parse_enum_field(lines, "format")?,
+        context_length: parse_usize_field(lines, "context_length")?,
+        description: parse_string_field(lines, "description")?,
+        size: parse_string_field(lines, "size")?,
+        requires_auth: parse_bool_field(lines, "requires_auth")?,
+    })
+}
+
+fn parse_string_field(lines: &[String], field: &str) -> Option<String> {
+    let prefix = format!("{field}: ");
+    lines.iter().find_map(|line| {
+        let rest = line.strip_prefix(&prefix)?;
+        let value = rest.strip_suffix(".into(),")?;
+        value
+            .strip_prefix('"')
+            .and_then(|value| value.strip_suffix('"'))
+            .map(ToString::to_string)
+    })
+}
+
+fn parse_enum_field(lines: &[String], field: &str) -> Option<String> {
+    let prefix = format!("{field}: ");
+    lines.iter().find_map(|line| {
+        let rest = line.strip_prefix(&prefix)?;
+        let value = rest.strip_suffix(',')?;
+        value.rsplit("::").next().map(ToString::to_string)
+    })
+}
+
+fn parse_usize_field(lines: &[String], field: &str) -> Option<usize> {
+    let prefix = format!("{field}: ");
+    lines.iter().find_map(|line| {
+        let rest = line.strip_prefix(&prefix)?;
+        let value = rest.strip_suffix(',')?;
+        value.parse::<usize>().ok()
+    })
+}
+
+fn parse_bool_field(lines: &[String], field: &str) -> Option<bool> {
+    let prefix = format!("{field}: ");
+    lines.iter().find_map(|line| {
+        let rest = line.strip_prefix(&prefix)?;
+        let value = rest.strip_suffix(',')?;
+        value.parse::<bool>().ok()
+    })
+}
+
 fn get_dir_size(path: &PathBuf) -> Result<u64> {
     let mut size = 0;
     for entry in walkdir::WalkDir::new(path) {
@@ -552,4 +863,36 @@ fn run_bootstrap_command(label: &str, program: &str, args: &[&str]) -> Result<()
 
     anyhow::ensure!(status.success(), "`{program}` exited with status {status}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{built_in_model_catalog, check_model_cache, normalize_install_profile, DoctorStatus};
+
+    #[test]
+    fn normalize_install_profile_accepts_known_profiles() {
+        assert_eq!(normalize_install_profile("runtime").unwrap(), "runtime");
+        assert_eq!(normalize_install_profile("platform").unwrap(), "platform");
+        assert_eq!(normalize_install_profile("full").unwrap(), "full");
+        assert_eq!(normalize_install_profile("mega").unwrap(), "mega");
+    }
+
+    #[test]
+    fn normalize_install_profile_rejects_unknown_profiles() {
+        assert!(normalize_install_profile("everything").is_err());
+    }
+
+    #[test]
+    fn model_cache_missing_under_existing_parent_is_warning() {
+        let temp = tempfile::tempdir().unwrap();
+        let cache = temp.path().join("models");
+        let check = check_model_cache(cache.as_path());
+        assert_eq!(check.status, DoctorStatus::Warn);
+    }
+
+    #[test]
+    fn built_in_model_catalog_parses_known_entry() {
+        let models = built_in_model_catalog();
+        assert!(models.iter().any(|model| model.name == "mistral-7b-q4"));
+    }
 }

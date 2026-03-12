@@ -1,0 +1,197 @@
+[package]
+name = "ferrite-gpu-lang"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Rust GPU language layer on top of Ferrite PTX-OS runtime"
+
+[dependencies]
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+ptx-runtime = { path = "../ferrite-os/crates/public/ptx-runtime" }
+ptx-kernels = { path = "../ferrite-os/crates/internal/ptx-kernels", features = ["candle-kernels"] }
+ptx-sys = { path = "../ferrite-os/crates/internal/ptx-sys" }
+ptx-tensor = { path = "../ferrite-os/crates/internal/ptx-tensor" }
+ferrite-apps = { path = "../ferrite-os/crates/public/ferrite-apps" }
+libc = "0.2"
+anyhow = "1.0"
+tch = { version = "0.22", optional = true }
+# External optional deps — enable with features when external repos are available
+# aten-ptx = { path = "../external/aten-ptx", optional = true }
+# candle-ptx = { path = "../external/candle-ptx", optional = true }
+# onnxruntime-ptx = { path = "../external/onnxruntime-ptx", optional = true }
+# cudarc = { path = "../external/cudarc-ptx", optional = true, features = ["ptx-alloc"] }
+rlsf = "0.2.1"
+opencv = { version = "0.93", optional = true, default-features = false, features = ["videoio", "imgproc"] }
+
+[features]
+default = []
+torch = ["dep:tch"]
+# candle = ["dep:candle-ptx", "dep:cudarc"]
+# onnxruntime = ["dep:onnxruntime-ptx"]
+capture = ["dep:opencv"]
+
+# ── Tests ─────────────────────────────────────────────────────────
+
+[[example]]
+name = "test_jit"
+path = "examples/tests/test_jit.rs"
+
+[[example]]
+name = "test_argsort"
+path = "examples/tests/test_argsort.rs"
+
+[[example]]
+name = "test_cumsum"
+path = "examples/tests/test_cumsum.rs"
+
+[[example]]
+name = "test_gather"
+path = "examples/tests/test_gather.rs"
+
+[[example]]
+name = "test_harden"
+path = "examples/tests/test_harden.rs"
+
+[[example]]
+name = "test_index_select"
+path = "examples/tests/test_index_select.rs"
+
+[[example]]
+name = "test_new_ops"
+path = "examples/tests/test_new_ops.rs"
+
+[[example]]
+name = "test_nn_ops"
+path = "examples/tests/test_nn_ops.rs"
+
+[[example]]
+name = "test_topk"
+path = "examples/tests/test_topk.rs"
+
+[[example]]
+name = "test_verbs"
+path = "examples/tests/test_verbs.rs"
+
+[[example]]
+name = "test_verbs2"
+path = "examples/tests/test_verbs2.rs"
+
+[[example]]
+name = "test_where"
+path = "examples/tests/test_where.rs"
+
+# ── Scripts ───────────────────────────────────────────────────────
+
+[[example]]
+name = "script_handoff"
+path = "examples/scripts/script_handoff.rs"
+
+[[example]]
+name = "script_runtime"
+path = "examples/scripts/script_runtime.rs"
+
+[[example]]
+name = "script_why_ferrite"
+path = "examples/scripts/script_why_ferrite.rs"
+
+[[example]]
+name = "script_fer_ctx"
+path = "examples/scripts/script_fer_ctx.rs"
+
+[[example]]
+name = "script_cv_depth"
+path = "examples/scripts/script_cv_depth.rs"
+required-features = ["torch"]
+
+[[example]]
+name = "script_cv_detect"
+path = "examples/scripts/script_cv_detect.rs"
+required-features = ["torch"]
+
+[[example]]
+name = "script_persistent_server"
+path = "examples/scripts/script_persistent_server.rs"
+required-features = ["torch"]
+
+[[example]]
+name = "script_speculative_decode"
+path = "examples/scripts/script_speculative_decode.rs"
+required-features = ["torch"]
+
+[[example]]
+name = "script_autonomous_agent"
+path = "examples/scripts/script_autonomous_agent.rs"
+required-features = ["torch"]
+
+[[example]]
+name = "script_hot_state"
+path = "examples/scripts/script_hot_state.rs"
+required-features = ["torch"]
+
+[[example]]
+name = "script_dataflow_pipeline"
+path = "examples/scripts/script_dataflow_pipeline.rs"
+required-features = ["torch"]
+
+# ── Benchmarks ────────────────────────────────────────────────────
+
+[[example]]
+name = "bench_ops"
+path = "examples/bench/bench_ops.rs"
+
+# ── JIT examples ──────────────────────────────────────────────────
+
+[[example]]
+name = "jit_basic"
+path = "examples/jit/jit_basic.rs"
+
+[[example]]
+name = "jit_functions"
+path = "examples/jit/jit_functions.rs"
+
+[[example]]
+name = "jit_pipeline"
+path = "examples/jit/jit_pipeline.rs"
+
+[[example]]
+name = "jit_heavy_math"
+path = "examples/jit/jit_heavy_math.rs"
+
+[[example]]
+name = "jit_stream_stress"
+path = "examples/jit/jit_stream_stress.rs"
+
+[[example]]
+name = "jit_thesis"
+path = "examples/jit/jit_thesis.rs"
+
+[[example]]
+name = "jit_flight_computer"
+path = "examples/jit/jit_flight_computer.rs"
+
+[[example]]
+name = "jit_tiling"
+path = "examples/jit/jit_tiling.rs"
+
+[[example]]
+name = "jit_bench_infix"
+path = "examples/jit/jit_bench_infix.rs"
+
+# ── Capture examples ─────────────────────────────────────────────
+
+[[example]]
+name = "camera_jit"
+path = "examples/capture/camera_jit.rs"
+required-features = ["capture"]
+
+[[example]]
+name = "camera_cv"
+path = "examples/capture/camera_cv.rs"
+required-features = ["capture", "torch"]
+
+[[example]]
+name = "script_hybrid_pipeline"
+path = "examples/scripts/script_hybrid_pipeline.rs"
+required-features = ["capture"]

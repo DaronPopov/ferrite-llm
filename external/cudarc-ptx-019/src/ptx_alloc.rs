@@ -14,6 +14,13 @@ pub fn enabled() -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(feature = "ptx-alloc")]
+fn verbose() -> bool {
+    std::env::var("FERRITE_TLSF_VERBOSE")
+        .map(|value| !matches!(value.as_str(), "0" | "false" | "False" | "FALSE"))
+        .unwrap_or(false)
+}
+
 #[cfg(not(feature = "ptx-alloc"))]
 pub fn enabled() -> bool {
     false
@@ -31,7 +38,9 @@ fn get_or_init_runtime() -> Arc<PtxRuntime> {
             .unwrap_or_else(|e| panic!("[cudarc-ptx-019] FATAL: Failed to initialize TLSF runtime: {e:?}"));
         runtime.export_for_hook();
         runtime.enable_hooks(false);
-        eprintln!("[cudarc-ptx-019] TLSF allocator attached to global PTX runtime");
+        if verbose() {
+            eprintln!("[cudarc-ptx-019] TLSF allocator attached to global PTX runtime");
+        }
         runtime
     });
 

@@ -114,6 +114,10 @@ pub struct DaemonConfig {
     #[serde(default = "default_pool_fraction")]
     pub pool_fraction: f32,
 
+    /// Fixed VRAM pool size in bytes. When non-zero, overrides pool_fraction.
+    #[serde(default)]
+    pub fixed_pool_size_bytes: u64,
+
     /// Prefer Orin-specific unified-memory scheduler path.
     #[serde(default)]
     pub prefer_orin_unified_memory: bool,
@@ -179,7 +183,8 @@ pub struct DaemonConfig {
     pub scheduler: SchedulerConfig,
 
     /// Single-pool strict mode: deny heavy GPU runs from child processes.
-    #[serde(default)]
+    /// Defaults to true so the daemon remains the sole owner of the main TLSF pool.
+    #[serde(default = "default_single_pool_strict")]
     pub single_pool_strict: bool,
 }
 
@@ -213,6 +218,9 @@ fn default_policy_mode() -> String {
     "permissive".to_string()
 }
 fn default_enable_scheduler_tui() -> bool {
+    true
+}
+fn default_single_pool_strict() -> bool {
     true
 }
 
@@ -367,6 +375,7 @@ impl Default for DaemonConfig {
             max_clients: default_max_clients(),
             max_streams: default_max_streams(),
             pool_fraction: default_pool_fraction(),
+            fixed_pool_size_bytes: 0,
             prefer_orin_unified_memory: false,
             use_managed_pool: false,
             keepalive_ms: default_keepalive_ms(),
@@ -383,7 +392,7 @@ impl Default for DaemonConfig {
             control_plane: ControlPlaneConfig::default(),
             jobs: JobsConfig::default(),
             scheduler: SchedulerConfig::default(),
-            single_pool_strict: false,
+            single_pool_strict: default_single_pool_strict(),
         }
     }
 }
@@ -417,6 +426,16 @@ impl DaemonConfig {
         if let Ok(val) = env::var("FERRITE_MAX_STREAMS") {
             if let Ok(streams) = val.parse() {
                 self.max_streams = streams;
+            }
+        }
+        if let Ok(val) = env::var("FERRITE_POOL_FRACTION") {
+            if let Ok(pool_fraction) = val.parse() {
+                self.pool_fraction = pool_fraction;
+            }
+        }
+        if let Ok(val) = env::var("FERRITE_FIXED_POOL_SIZE_BYTES") {
+            if let Ok(fixed_pool_size_bytes) = val.parse() {
+                self.fixed_pool_size_bytes = fixed_pool_size_bytes;
             }
         }
         if env_bool_enabled("FERRITE_PREFER_ORIN_UM") {

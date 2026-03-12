@@ -62,6 +62,7 @@ pub(super) fn execute_command(
         "metrics" => commands::handle_metrics(state),
         "snapshot" => commands::handle_snapshot(state),
         "health" => commands::handle_health(state),
+        "studio-snapshot" => commands::handle_studio_snapshot(state),
         "keepalive" => commands::handle_keepalive(state),
         "apps" => commands::handle_apps(state),
         "app-start" => commands::handle_app_start(state, &args_refs),

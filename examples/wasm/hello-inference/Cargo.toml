@@ -9,9 +9,3 @@ crate-type = ["cdylib"]
 [dependencies]
 ferrite-sdk = { path = "../../../crates/ferrite-sdk" }
 wit-bindgen = "0.37"
-
-[profile.release]
-opt-level = "z"
-lto = true
-strip = true
-panic = "abort"

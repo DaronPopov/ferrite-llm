@@ -64,6 +64,7 @@ LIBS := -L$(CUDA_LIB) -lcublas -lcudart -lcuda
 
 # Source files (recursive)
 CUDA_SOURCES := $(shell find $(SRC_DIR) -type f -name '*.cu' | sort)
+CUDA_DEPS := $(shell find $(SRC_DIR) -type f \( -name '*.cu' -o -name '*.c' -o -name '*.h' -o -name '*.hpp' -o -name '*.inl' \) | sort)
 
 # Output
 TARGET := $(LIB_DIR)/libptx_os.so
@@ -91,8 +92,8 @@ dirs:
 	@mkdir -p $(LIB_DIR)
 	@mkdir -p $(BUILD_DIR)
 
-$(TARGET): $(CUDA_SOURCES)
-	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -o $@ $^ $(LIBS)
+$(TARGET): dirs $(CUDA_DEPS)
+	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -o $@ $(CUDA_SOURCES) $(LIBS)
 	@echo "Built: $@"
 
 # Build CUDA intercept hook (LD_PRELOAD library) - includes context hook

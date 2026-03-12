@@ -53,6 +53,7 @@ pub fn print_usage() {
     eprintln!("    --device N            GPU device ID");
     eprintln!("    --streams N           Maximum streams");
     eprintln!("    --pool-fraction F     VRAM pool fraction (0.0-1.0)");
+    eprintln!("    --pool-bytes N        Fixed VRAM pool size in bytes");
     eprintln!("    --boot-kernel         Boot persistent kernel");
     eprintln!("    --watch               Enable watch mode");
     eprintln!("    --watch-ms N          Watch interval (milliseconds)");
@@ -66,6 +67,8 @@ pub fn print_usage() {
     eprintln!("    FERRITE_SOCKET           Socket path (canonical)");
     eprintln!("    FERRITE_DAEMON_SOCKET    Socket path (compat alias)");
     eprintln!("    FERRITE_MAX_STREAMS      Maximum streams");
+    eprintln!("    FERRITE_POOL_FRACTION    VRAM pool fraction");
+    eprintln!("    FERRITE_FIXED_POOL_SIZE_BYTES  Fixed VRAM pool size in bytes");
     eprintln!("    FERRITE_BOOT_KERNEL      Boot persistent kernel");
     eprintln!("    FERRITE_WATCH            Enable watch mode");
     eprintln!("    FERRITE_APPS_BIN_DIR     Managed app binaries directory");
@@ -136,6 +139,16 @@ pub fn parse_cli() -> Result<CliInvocation, i32> {
                     Ok(parsed) => parsed,
                     Err(_) => {
                         eprintln!("Invalid pool fraction: {value}");
+                        return Err(2);
+                    }
+                };
+            }
+            "--pool-bytes" => {
+                let value = next_value("--pool-bytes", &mut args)?;
+                config.fixed_pool_size_bytes = match value.parse() {
+                    Ok(parsed) => parsed,
+                    Err(_) => {
+                        eprintln!("Invalid pool size in bytes: {value}");
                         return Err(2);
                     }
                 };

@@ -420,7 +420,10 @@ pub fn cmd_run_file(
     let tx = tx.clone();
     let cancel = Arc::clone(&state.run_cancel_flag);
     let timeout_secs = state.run_config.timeout_secs;
-    let runner_env = build_runner_env(daemon);
+    let runner_env = build_runner_env(
+        daemon,
+        daemon_commands::is_inference_priority_target(&file_path.to_string_lossy()),
+    );
 
     std::thread::spawn(move || {
         run_runner_subprocess(runner_args, runner_env, profiles, tx, cancel, timeout_secs);
@@ -492,6 +495,7 @@ pub fn cmd_run_entry(
     // Switch to full-screen run output view
     state.enter_run_output();
 
+    let dedicated_inference = daemon_commands::is_inference_priority_target(&entry_id);
     let mut runner_args = vec!["run-entry".to_string(), entry_id];
     if !passthrough.is_empty() {
         runner_args.push("--".to_string());
@@ -501,7 +505,7 @@ pub fn cmd_run_entry(
     let tx = tx.clone();
     let cancel = Arc::clone(&state.run_cancel_flag);
     let timeout_secs = state.run_config.timeout_secs;
-    let runner_env = build_runner_env(daemon);
+    let runner_env = build_runner_env(daemon, dedicated_inference);
 
     std::thread::spawn(move || {
         run_runner_subprocess(runner_args, runner_env, profiles, tx, cancel, timeout_secs);
@@ -912,14 +916,28 @@ fn run_runner_subprocess(
     }
 }
 
-fn build_runner_env(daemon: &Arc<DaemonState>) -> Vec<(String, String)> {
-    daemon.runtime.export_context();
-
+fn build_runner_env(daemon: &Arc<DaemonState>, dedicated_inference: bool) -> Vec<(String, String)> {
     let mut envs = Vec::with_capacity(5);
     envs.push((
         "FERRITE_DAEMON_SOCKET".to_string(),
         daemon.config.socket_path.clone(),
     ));
+
+    if dedicated_inference {
+        envs.push((
+            "PTX_MAX_STREAMS".to_string(),
+            std::env::var("FERRITE_INFERENCE_MAX_STREAMS")
+                .unwrap_or_else(|_| "16".to_string()),
+        ));
+        envs.push((
+            "PTX_POOL_FRACTION".to_string(),
+            std::env::var("FERRITE_INFERENCE_POOL_FRACTION")
+                .unwrap_or_else(|_| "0.90".to_string()),
+        ));
+        return envs;
+    }
+
+    daemon.runtime.export_context();
 
     // Signal daemon-client mode so the child creates its own bounded runtime
     // instead of importing the daemon's host-side pointer (invalid cross-process).

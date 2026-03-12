@@ -20,6 +20,13 @@ pub fn enabled() -> bool {
         .unwrap_or(false)
 }
 
+#[cfg(feature = "ptx-alloc")]
+fn verbose() -> bool {
+    std::env::var("FERRITE_TLSF_VERBOSE")
+        .map(|value| !matches!(value.as_str(), "0" | "false" | "False" | "FALSE"))
+        .unwrap_or(false)
+}
+
 #[cfg(not(feature = "ptx-alloc"))]
 pub fn enabled() -> bool {
     false
@@ -38,7 +45,9 @@ fn get_or_init_runtime() -> Arc<PtxRuntime> {
             .unwrap_or_else(|e| panic!("[cudarc-ptx] FATAL: Failed to initialize TLSF runtime: {:?}", e));
         runtime.export_for_hook();
         runtime.enable_hooks(false);
-        eprintln!("[cudarc-ptx] ✓ TLSF allocator attached to global PTX runtime");
+        if verbose() {
+            eprintln!("[cudarc-ptx] ✓ TLSF allocator attached to global PTX runtime");
+        }
         runtime
     });
 
@@ -101,6 +110,9 @@ pub fn get_tlsf_stats() -> Option<ptx_sys::TLSFPoolStats> {
 /// Print TLSF health report
 #[cfg(feature = "ptx-alloc")]
 pub fn print_tlsf_health() {
+    if !verbose() {
+        return;
+    }
     if let Some(stats) = get_tlsf_stats() {
         eprintln!("\n[cudarc-ptx] TLSF Health Report:");
         eprintln!("  Pool size:       {:.2} GB", stats.total_pool_size as f64 / 1024.0 / 1024.0 / 1024.0);

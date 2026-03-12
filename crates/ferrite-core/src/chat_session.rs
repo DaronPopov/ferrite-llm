@@ -38,6 +38,7 @@
 //! ```
 
 use crate::generation::{GenerationConfig, InferenceModel};
+use crate::hooks::{apply_candidate_rewrite, top_logits_candidates, LogitsHook};
 use crate::models::ChatFormat;
 use crate::sampling::{Sampler, SamplerConfig};
 use crate::tokenizer::{StreamDecoder, Tokenizer};
@@ -166,6 +167,8 @@ pub struct ChatSession<M: InferenceModel> {
     stop_tokens: Vec<u32>,
     /// Stop strings checked against decoded text (fallback when tokenizer lacks special tokens)
     stop_strings: Vec<String>,
+    /// Optional hook for modifying top logits before sampling.
+    logits_hook: Option<Box<dyn LogitsHook>>,
     /// System prompt (if any)
     system_prompt: Option<String>,
     /// Whether system prompt has been encoded
@@ -223,6 +226,7 @@ impl<M: InferenceModel> ChatSession<M> {
             sampler,
             stop_tokens,
             stop_strings,
+            logits_hook: None,
             system_prompt: system_prompt.map(|s| s.to_string()),
             system_encoded: false,
         })
@@ -325,9 +329,8 @@ impl<M: InferenceModel> ChatSession<M> {
             .map_err(|e| ChatSessionError::ModelError(e.to_string()))?;
 
         let first_token = self
-            .sampler
-            .sample(&logits, &self.cached_tokens)
-            .map_err(|e| ChatSessionError::SamplingError(e.to_string()))?;
+            .sample_with_optional_hook(&logits)
+            .map_err(ChatSessionError::SamplingError)?;
 
         // Create streaming decoder
         let decoder = self.tokenizer.decode_stream(&self.cached_tokens, true);
@@ -377,6 +380,10 @@ impl<M: InferenceModel> ChatSession<M> {
             seed: generation.seed,
         });
         self.config.generation = generation;
+    }
+
+    pub fn set_logits_hook(&mut self, hook: Option<Box<dyn LogitsHook>>) {
+        self.logits_hook = hook;
     }
 
     /// Get the cached tokens (for debugging/inspection)
@@ -475,9 +482,8 @@ impl<M: InferenceModel> ChatSession<M> {
             .map_err(|e| ChatSessionError::ModelError(e.to_string()))?;
 
         let mut next_token = self
-            .sampler
-            .sample(&logits, &self.cached_tokens)
-            .map_err(|e| ChatSessionError::SamplingError(e.to_string()))?;
+            .sample_with_optional_hook(&logits)
+            .map_err(ChatSessionError::SamplingError)?;
 
         // Setup decoder for response
         let mut response_tokens = vec![next_token];
@@ -511,9 +517,8 @@ impl<M: InferenceModel> ChatSession<M> {
                 .map_err(|e| ChatSessionError::ModelError(e.to_string()))?;
 
             next_token = self
-                .sampler
-                .sample(&logits, &self.cached_tokens)
-                .map_err(|e| ChatSessionError::SamplingError(e.to_string()))?;
+                .sample_with_optional_hook(&logits)
+                .map_err(ChatSessionError::SamplingError)?;
 
             if self.stop_tokens.contains(&next_token) {
                 break;
@@ -677,6 +682,25 @@ impl<M: InferenceModel> ChatSession<M> {
         // Rough estimate: ~4 chars per token + overhead for formatting
         (content.len() / 4) + 20
     }
+
+    fn sample_with_optional_hook(
+        &mut self,
+        logits: &candle_core::Tensor,
+    ) -> Result<u32, String> {
+        let adjusted = if let Some(hook) = self.logits_hook.as_mut() {
+            let candidates = top_logits_candidates(logits, 16)?;
+            match hook.rewrite_top_logits(&candidates, &self.cached_tokens)? {
+                Some(rewritten) => apply_candidate_rewrite(logits, &rewritten)?,
+                None => logits.clone(),
+            }
+        } else {
+            logits.clone()
+        };
+
+        self.sampler
+            .sample(&adjusted, &self.cached_tokens)
+            .map_err(|e| e.to_string())
+    }
 }
 
 /// Streaming response iterator
@@ -759,9 +783,8 @@ impl<'a, M: InferenceModel> StreamingResponse<'a, M> {
 
         self.next_token = Some(
             self.session
-                .sampler
-                .sample(&logits, &self.session.cached_tokens)
-                .map_err(|e| ChatSessionError::SamplingError(e.to_string()))?,
+                .sample_with_optional_hook(&logits)
+                .map_err(ChatSessionError::SamplingError)?,
         );
 
         Ok(text.or(Some(String::new())))

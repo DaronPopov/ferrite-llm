@@ -7,6 +7,7 @@ use std::sync::Arc;
 use wasmtime::component::{Resource, ResourceTable};
 
 use super::adapter::{ModelAdapter, TokenizerAdapter, wit_to_ferrite_config};
+use super::hooks::ScriptHooks;
 use crate::bindings::{
     HostGeneration,
     WitGenConfig,
@@ -17,18 +18,44 @@ use crate::bindings::{
     TokenizerHost,
 };
 
+struct HookedGeneration {
+    inner: super::adapter::ActiveGeneration,
+    hooks: Option<ScriptHooks>,
+}
+
+impl HookedGeneration {
+    fn next_chunk(&mut self) -> Result<Option<String>, String> {
+        match self.inner.next_chunk()? {
+            Some(chunk) => {
+                if let Some(hooks) = &self.hooks {
+                    Ok(Some(hooks.apply_post_chunk(&chunk)?))
+                } else {
+                    Ok(Some(chunk))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+}
+
 /// Host state - bridges WASM to ferrite engine
 pub struct HostState {
     model_cache: PathBuf,
     active_tokenizer: Option<Arc<ferrite_core::Tokenizer>>,
+    hooks: Option<ScriptHooks>,
     table: ResourceTable,
 }
 
 impl HostState {
     pub fn new(model_cache: PathBuf) -> anyhow::Result<Self> {
+        Self::with_hooks(model_cache, None)
+    }
+
+    pub fn with_hooks(model_cache: PathBuf, hooks: Option<ScriptHooks>) -> anyhow::Result<Self> {
         Ok(Self {
             model_cache,
             active_tokenizer: None,
+            hooks,
             table: ResourceTable::new(),
         })
     }
@@ -52,6 +79,7 @@ impl InferenceHost for HostState {
             model_name.clone(),
             self.model_cache.clone(),
             auth_token,
+            self.hooks.clone(),
         )?;
         self.active_tokenizer = Some(model_adapter.tokenizer());
 
@@ -85,8 +113,18 @@ impl HostModel for HostState {
         tracing::debug!("Prompt: {}", prompt);
 
         // Convert config and call ferrite engine
+        let prompt = if let Some(hooks) = &self.hooks {
+            hooks.apply_pre_prompt(&prompt)?
+        } else {
+            prompt
+        };
         let ferrite_config = wit_to_ferrite_config(&config);
-        model_adapter.generate(&prompt, &ferrite_config)
+        let response = model_adapter.generate(&prompt, &ferrite_config)?;
+        if let Some(hooks) = &self.hooks {
+            hooks.apply_post_response(&response)
+        } else {
+            Ok(response)
+        }
     }
 
     fn generate_stream(
@@ -102,8 +140,21 @@ impl HostModel for HostState {
             .get_mut(&model_resource)
             .map_err(|e| format!("Model not found: {}", e))?;
 
+        let prompt = if let Some(hooks) = &self.hooks {
+            hooks.apply_pre_prompt(&prompt)?
+        } else {
+            prompt
+        };
         let ferrite_config = wit_to_ferrite_config(&config);
-        model_adapter.generate_stream(&prompt, &ferrite_config)
+        let chunks = model_adapter.generate_stream(&prompt, &ferrite_config)?;
+        if let Some(hooks) = &self.hooks {
+            chunks
+                .into_iter()
+                .map(|chunk| hooks.apply_post_chunk(&chunk))
+                .collect()
+        } else {
+            Ok(chunks)
+        }
     }
 
     fn start_generate_stream(
@@ -119,8 +170,16 @@ impl HostModel for HostState {
             .get_mut(&model_resource)
             .map_err(|e| format!("Model not found: {}", e))?;
 
+        let prompt = if let Some(hooks) = &self.hooks {
+            hooks.apply_pre_prompt(&prompt)?
+        } else {
+            prompt
+        };
         let ferrite_config = wit_to_ferrite_config(&config);
-        let generation = model_adapter.start_generate_stream(&prompt, &ferrite_config)?;
+        let generation = HookedGeneration {
+            inner: model_adapter.start_generate_stream(&prompt, &ferrite_config)?,
+            hooks: self.hooks.clone(),
+        };
 
         let resource = self
             .table
@@ -143,7 +202,7 @@ impl HostGeneration for HostState {
         &mut self,
         generation: Resource<WitGeneration>,
     ) -> Result<Option<String>, String> {
-        let generation_resource = Resource::<super::adapter::ActiveGeneration>::new_borrow(generation.rep());
+        let generation_resource = Resource::<HookedGeneration>::new_borrow(generation.rep());
         let generation_handle = self
             .table
             .get_mut(&generation_resource)
@@ -152,7 +211,7 @@ impl HostGeneration for HostState {
     }
 
     fn drop(&mut self, generation: Resource<WitGeneration>) -> wasmtime::Result<()> {
-        let generation_resource = Resource::<super::adapter::ActiveGeneration>::new_own(generation.rep());
+        let generation_resource = Resource::<HookedGeneration>::new_own(generation.rep());
         self.table.delete(generation_resource)?;
         tracing::info!("Generation handle dropped");
         Ok(())

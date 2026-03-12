@@ -31,10 +31,12 @@
 pub mod bindings;
 pub mod adapter;
 pub mod host;
+pub mod hooks;
 
 // Re-export key types
 pub use adapter::{ModelAdapter, wit_to_ferrite_config};
 pub use host::HostState;
+pub use hooks::ScriptHooks;
 
 // Re-export ferrite-core for convenience
 pub use ferrite_core;

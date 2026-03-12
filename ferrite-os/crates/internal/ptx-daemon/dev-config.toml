@@ -7,6 +7,7 @@ pid_file = "/tmp/ferrite-daemon.pid"
 max_clients = 32
 max_streams = 128
 pool_fraction = 0.25
+# fixed_pool_size_bytes = 104857600
 prefer_orin_unified_memory = false
 use_managed_pool = false
 keepalive_ms = 5000
@@ -24,6 +25,9 @@ client_timeout_secs = 30
 
 # TUI is enabled by default (auto-detects TTY)
 # headless = false
+
+# Reserve the main TLSF pool for the daemon
+# single_pool_strict = true
 
 # TUI theme: "default" or "high-contrast" (or set FERRITE_THEME env var)
 # theme = "default"

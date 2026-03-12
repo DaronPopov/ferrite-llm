@@ -76,6 +76,8 @@ struct RunOverrides {
     streams: Option<u32>,
     /// Override child pool fraction (PTX_POOL_FRACTION).
     pool: Option<f32>,
+    /// Override execution mode selection for child runtime ownership.
+    exec_mode: Option<RunExecutionPreference>,
 }
 
 #[derive(Debug)]
@@ -139,28 +141,48 @@ impl RunOrchestratorProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RunExecutionPreference {
+    BoundedChild,
+    DedicatedChild,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RunExecutionMode {
-    /// External process with bounded runtime (non-single-pool-safe).
-    ExternalProcess,
-    /// Denied: target requires in-daemon execution not yet available.
+    /// External process with bounded runtime profile.
+    ExternalProcessBounded,
+    /// External process with a dedicated runtime for heavy inference.
+    ExternalProcessDedicated,
+    /// Denied: target is a non-inference heavy workload under strict mode.
     DeniedStrictMode,
 }
 
-fn classify_execution_mode(target: &str, strict: bool) -> RunExecutionMode {
-    if !strict {
-        return RunExecutionMode::ExternalProcess;
+fn classify_execution_mode(
+    target: &str,
+    strict: bool,
+    preference: Option<RunExecutionPreference>,
+) -> RunExecutionMode {
+    if let Some(preference) = preference {
+        return match preference {
+            RunExecutionPreference::BoundedChild => RunExecutionMode::ExternalProcessBounded,
+            RunExecutionPreference::DedicatedChild => RunExecutionMode::ExternalProcessDedicated,
+        };
     }
     let t = target.to_ascii_lowercase();
+    if is_inference_priority_target(target) {
+        return RunExecutionMode::ExternalProcessDedicated;
+    }
+    if !strict {
+        return RunExecutionMode::ExternalProcessBounded;
+    }
     let heavy = t.contains("bench")
         || t.contains("stress")
         || t.contains("jitter")
         || t.contains("latency")
-        || t.contains("training")
-        || t.contains("inference");
+        || t.contains("training");
     if heavy {
         RunExecutionMode::DeniedStrictMode
     } else {
-        RunExecutionMode::ExternalProcess
+        RunExecutionMode::ExternalProcessBounded
     }
 }
 
@@ -179,6 +201,20 @@ fn parse_profile_override(value: &str) -> Option<RunOrchestratorProfile> {
         "stress" => Some(RunOrchestratorProfile::Stress),
         _ => None,
     }
+}
+
+pub(crate) fn is_inference_priority_target(target: &str) -> bool {
+    let t = target.to_ascii_lowercase();
+    t.contains("inference")
+        || t.contains("decode")
+        || t.contains("generate")
+        || t.contains("token")
+        || t.contains("chat")
+        || t.contains("llm")
+        || t.contains("mistral")
+        || t.contains("llama")
+        || t.contains("qwen")
+        || t.contains("gemma")
 }
 
 fn profile_chain(initial: RunOrchestratorProfile) -> Vec<RunOrchestratorProfile> {
@@ -230,6 +266,7 @@ pub(crate) fn compute_orchestrator_profiles(
     let pool_free = tlsf.free_bytes;
     let vram_free = hot.vram_free as usize;
     let util = tlsf.utilization_percent as f64;
+    let inference_priority = is_inference_priority_target(target);
 
     if util >= 98.0 || pool_free < 96 * MIB || vram_free < 128 * MIB {
         return Err(format!(
@@ -237,6 +274,15 @@ pub(crate) fn compute_orchestrator_profiles(
             util,
             pool_free as f64 / (MIB as f64),
             vram_free as f64 / (MIB as f64),
+        ));
+    }
+
+    if util >= 95.0 && !inference_priority {
+        return Err(format!(
+            "run admission denied: TLSF pool reserved for inference-priority workloads at high utilization (pool util {:.1}%, pool free {:.1} MiB, target '{}')",
+            util,
+            pool_free as f64 / (MIB as f64),
+            target
         ));
     }
 
@@ -252,7 +298,9 @@ pub(crate) fn compute_orchestrator_profiles(
         || t.contains("jitter")
         || t.contains("latency");
 
-    let initial = if util >= 85.0 || pool_free < 512 * MIB || vram_free < 768 * MIB {
+    let initial = if inference_priority && util >= 95.0 {
+        RunOrchestratorProfile::Safe
+    } else if util >= 85.0 || pool_free < 512 * MIB || vram_free < 768 * MIB {
         RunOrchestratorProfile::Safe
     } else if stress_hint && util < 65.0 && pool_free > 1536 * MIB && vram_free > 2048 * MIB {
         RunOrchestratorProfile::Stress
@@ -331,6 +379,10 @@ fn parse_run_overrides(flags: &[&str]) -> (RunOverrides, Vec<String>) {
             } else {
                 remaining.push(flag.to_string());
             }
+        } else if flag == "--dedicated-runtime" || flag == "--dedicated-inference" {
+            overrides.exec_mode = Some(RunExecutionPreference::DedicatedChild);
+        } else if flag == "--bounded-runtime" {
+            overrides.exec_mode = Some(RunExecutionPreference::BoundedChild);
         } else {
             remaining.push(flag.to_string());
         }
@@ -340,7 +392,7 @@ fn parse_run_overrides(flags: &[&str]) -> (RunOverrides, Vec<String>) {
 
 fn parse_run_file_args(args: &[&str]) -> Result<ParsedRunFileArgs, String> {
     if args.is_empty() {
-        return Err("usage: run-file <path> [--entry <name>] [--streams=N] [--pool=F] [-- <args...>]".to_string());
+        return Err("usage: run-file <path> [--entry <name>] [--streams=N] [--pool=F] [--dedicated-runtime|--bounded-runtime] [-- <args...>]".to_string());
     }
     let (head, tail) = split_passthrough(args);
     let path = head[0].to_string();
@@ -366,7 +418,7 @@ fn parse_run_file_args(args: &[&str]) -> Result<ParsedRunFileArgs, String> {
     let (overrides, unknown) = parse_run_overrides(&other_flags);
     if let Some(unk) = unknown.first() {
         return Err(format!(
-            "unknown flag '{unk}' (expected --entry, --streams=N, --pool=F, or --)"
+            "unknown flag '{unk}' (expected --entry, --streams=N, --pool=F, --dedicated-runtime, --bounded-runtime, or --)"
         ));
     }
 
@@ -380,17 +432,17 @@ fn parse_run_file_args(args: &[&str]) -> Result<ParsedRunFileArgs, String> {
 
 fn parse_run_entry_args(args: &[&str]) -> Result<ParsedRunEntryArgs, String> {
     if args.is_empty() {
-        return Err("usage: run-entry <entry-id> [--streams=N] [--pool=F] [-- <args...>]".to_string());
+        return Err("usage: run-entry <entry-id> [--streams=N] [--pool=F] [--dedicated-runtime|--bounded-runtime] [-- <args...>]".to_string());
     }
     let (head, tail) = split_passthrough(args);
     if head.is_empty() {
-        return Err("usage: run-entry <entry-id> [--streams=N] [--pool=F] [-- <args...>]".to_string());
+        return Err("usage: run-entry <entry-id> [--streams=N] [--pool=F] [--dedicated-runtime|--bounded-runtime] [-- <args...>]".to_string());
     }
     let entry_id = head[0].to_string();
     let (overrides, unknown) = parse_run_overrides(&head[1..]);
     if let Some(unk) = unknown.first() {
         return Err(format!(
-            "unknown flag '{unk}' (expected --streams=N, --pool=F, or --)"
+            "unknown flag '{unk}' (expected --streams=N, --pool=F, --dedicated-runtime, --bounded-runtime, or --)"
         ));
     }
     Ok(ParsedRunEntryArgs {
@@ -408,6 +460,7 @@ fn run_runner_once_with_events(
     entry: Option<&str>,
     runner_args: &[String],
     overrides: &RunOverrides,
+    exec_mode: RunExecutionMode,
     profile: RunOrchestratorProfile,
     attempt: usize,
     total_attempts: usize,
@@ -444,43 +497,52 @@ fn run_runner_once_with_events(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    // Refresh exported context handle so subprocesses can share the GPU context.
-    state.runtime.export_context();
+    if exec_mode == RunExecutionMode::ExternalProcessBounded {
+        // Refresh exported context handle so subprocesses can share the GPU context.
+        state.runtime.export_context();
 
-    // Signal daemon-client mode: the child creates its own bounded runtime
-    // instead of importing the daemon's host-side pointer (which is invalid
-    // across process boundaries).  PTX_MAX_STREAMS and PTX_POOL_FRACTION
-    // from the profile will be enforced by apply_env_overrides() in the
-    // C runtime init path.
-    cmd.env("PTX_DAEMON_CLIENT", "1");
+        // Bounded child mode: the subprocess creates a constrained runtime.
+        cmd.env("PTX_DAEMON_CLIENT", "1");
 
-    // NOTE: We intentionally do NOT propagate PTX_SINGLE_POOL_STRICT to
-    // child processes.  The daemon already enforces strict mode at the Rust
-    // level (denying heavy targets before spawning).  Light targets that
-    // pass the daemon's classifier are allowed to create bounded pools —
-    // that's the expected transitional behavior.  Setting the C guard here
-    // would block ALL children from initializing any pool, breaking the
-    // light-target path.
-
-    for key in ["PTX_CONTEXT_PTR", "PTX_STREAM_PTR"] {
-        if let Ok(value) = env::var(key) {
-            cmd.env(key, value);
+        for key in ["PTX_CONTEXT_PTR", "PTX_STREAM_PTR"] {
+            if let Ok(value) = env::var(key) {
+                cmd.env(key, value);
+            }
         }
     }
 
-    for (key, value) in profile_env_pairs(profile) {
-        cmd.env(key, value);
+    if exec_mode == RunExecutionMode::ExternalProcessBounded {
+        for (key, value) in profile_env_pairs(profile) {
+            cmd.env(key, value);
+        }
+    } else {
+        let default_streams = env::var("FERRITE_INFERENCE_MAX_STREAMS")
+            .ok()
+            .unwrap_or_else(|| "16".to_string());
+        let default_pool_fraction = env::var("FERRITE_INFERENCE_POOL_FRACTION")
+            .ok()
+            .unwrap_or_else(|| "0.90".to_string());
+        cmd.env("PTX_MAX_STREAMS", default_streams);
+        cmd.env("PTX_POOL_FRACTION", default_pool_fraction);
     }
 
     // Per-command overrides (--streams=N, --pool=F) take highest precedence.
-    // Daemon-level env overrides are second priority.  Profile defaults are lowest.
+    // Daemon-level env overrides are second priority.  Mode defaults are lowest.
     if let Some(streams) = overrides.streams {
         cmd.env("PTX_MAX_STREAMS", streams.to_string());
+    } else if exec_mode == RunExecutionMode::ExternalProcessDedicated {
+        if let Ok(v) = env::var("FERRITE_INFERENCE_MAX_STREAMS") {
+            cmd.env("PTX_MAX_STREAMS", &v);
+        }
     } else if let Ok(v) = env::var("FERRITE_CHILD_MAX_STREAMS") {
         cmd.env("PTX_MAX_STREAMS", &v);
     }
     if let Some(pool) = overrides.pool {
         cmd.env("PTX_POOL_FRACTION", pool.to_string());
+    } else if exec_mode == RunExecutionMode::ExternalProcessDedicated {
+        if let Ok(v) = env::var("FERRITE_INFERENCE_POOL_FRACTION") {
+            cmd.env("PTX_POOL_FRACTION", &v);
+        }
     } else if let Ok(v) = env::var("FERRITE_CHILD_POOL_FRACTION") {
         cmd.env("PTX_POOL_FRACTION", &v);
     }
@@ -494,9 +556,31 @@ fn run_runner_once_with_events(
                 "[orchestrator] attempt {}/{} profile={} streams={} pool_fraction={:.2}",
                 attempt,
                 total_attempts,
-                profile.as_str(),
-                profile.max_streams(),
-                profile.pool_fraction()
+                if exec_mode == RunExecutionMode::ExternalProcessDedicated {
+                    "dedicated"
+                } else {
+                    profile.as_str()
+                },
+                overrides.streams.unwrap_or_else(|| {
+                    if exec_mode == RunExecutionMode::ExternalProcessDedicated {
+                        env::var("FERRITE_INFERENCE_MAX_STREAMS")
+                            .ok()
+                            .and_then(|v| v.parse::<u32>().ok())
+                            .unwrap_or(16)
+                    } else {
+                        profile.max_streams()
+                    }
+                }),
+                overrides.pool.unwrap_or_else(|| {
+                    if exec_mode == RunExecutionMode::ExternalProcessDedicated {
+                        env::var("FERRITE_INFERENCE_POOL_FRACTION")
+                            .ok()
+                            .and_then(|v| v.parse::<f32>().ok())
+                            .unwrap_or(0.90)
+                    } else {
+                        profile.pool_fraction()
+                    }
+                })
             ),
         },
     );
@@ -506,7 +590,11 @@ fn run_runner_once_with_events(
         cmd,
         attempt,
         total_attempts,
-        profile.as_str()
+        if exec_mode == RunExecutionMode::ExternalProcessDedicated {
+            "dedicated"
+        } else {
+            profile.as_str()
+        }
     );
     emit_scheduler_event(
         state,
@@ -650,13 +738,17 @@ fn run_runner_command_with_events(
     overrides: &RunOverrides,
 ) -> io::Result<RunRunnerResult> {
     // Single-pool strict mode: classify and potentially deny heavy targets
-    let exec_mode = classify_execution_mode(target, state.config.single_pool_strict);
+    let exec_mode =
+        classify_execution_mode(target, state.config.single_pool_strict, overrides.exec_mode);
     emit_scheduler_event(
         state,
         SchedulerEvent::RunExecutionModeSelected {
             request_id,
             mode: match exec_mode {
-                RunExecutionMode::ExternalProcess => "external-process".to_string(),
+                RunExecutionMode::ExternalProcessBounded => "external-process-bounded".to_string(),
+                RunExecutionMode::ExternalProcessDedicated => {
+                    "external-process-dedicated".to_string()
+                }
                 RunExecutionMode::DeniedStrictMode => "denied-strict-mode".to_string(),
             },
             strict: state.config.single_pool_strict,
@@ -711,6 +803,7 @@ fn run_runner_command_with_events(
             entry,
             runner_args,
             overrides,
+            exec_mode,
             profile,
             attempt,
             total_attempts,
@@ -903,6 +996,120 @@ pub fn handle_health(state: &DaemonState) -> io::Result<String> {
         "active_clients": active,
         "running_apps": running_apps,
         "max_clients": state.config.max_clients,
+    });
+    to_json_line(&response)
+}
+
+pub fn handle_studio_snapshot(state: &DaemonState) -> io::Result<String> {
+    cleanup_exited_apps(state);
+
+    let tlsf = state.runtime.tlsf_stats();
+    let stats = state.runtime.stats();
+    let runtime_snap = state.runtime.system_snapshot();
+    let uptime = state.start_time.elapsed().as_secs();
+    let active_clients = state.active_clients.load(Ordering::Relaxed);
+    let total_requests = state.total_requests.load(Ordering::Relaxed);
+    let failed_requests = state.failed_requests.load(Ordering::Relaxed);
+    let running_apps = state.apps.lock().len();
+    let daemon_healthy = tlsf.is_healthy
+        && active_clients < state.config.max_clients as u64
+        && tlsf.utilization_percent < 95.0;
+
+    let paused = state.scheduler_paused.load(Ordering::Relaxed);
+    let engine = state.policy_engine.lock();
+    let sched = state.scheduler.lock();
+    let sched_snap = sched.state_snapshot();
+
+    let queued: Vec<serde_json::Value> = sched
+        .dispatcher()
+        .queued_jobs()
+        .iter()
+        .map(|job| {
+            serde_json::json!({
+                "job_id": job.id.0,
+                "tenant_id": job.tenant_id.0,
+                "state": job.state.to_string(),
+                "priority": format!("{:?}", job.priority),
+                "vram_estimate": job.estimated_vram_bytes,
+            })
+        })
+        .collect();
+
+    let active: Vec<serde_json::Value> = sched
+        .dispatcher()
+        .active_records()
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "job_id": r.job_id.0,
+                "tenant_id": r.tenant_id.0,
+                "stream_id": r.stream_id,
+                "vram_reserved": r.estimated_vram_bytes,
+                "running_ms": r.started_at.elapsed().as_millis() as u64,
+            })
+        })
+        .collect();
+
+    let managed_running: Vec<serde_json::Value> = state
+        .apps
+        .lock()
+        .values()
+        .map(|app| {
+            serde_json::json!({
+                "id": app.id,
+                "name": app.name,
+                "pid": app.child.id(),
+                "uptime_secs": app.started_at.elapsed().as_secs(),
+                "args": app.args,
+            })
+        })
+        .collect();
+
+    let recent_events: Vec<serde_json::Value> = state
+        .event_stream
+        .lock()
+        .recent(24)
+        .into_iter()
+        .filter_map(|entry| serde_json::to_value(entry).ok())
+        .collect();
+
+    let response = serde_json::json!({
+        "ok": true,
+        "ts_secs": uptime,
+        "pool_total": tlsf.total_pool_size,
+        "allocated": tlsf.allocated_bytes,
+        "free": tlsf.free_bytes,
+        "fragmentation": tlsf.fragmentation_ratio,
+        "pool_utilization": tlsf.utilization_percent,
+        "pool_healthy": tlsf.is_healthy,
+        "daemon_healthy": daemon_healthy,
+        "uptime_secs": uptime,
+        "active_clients": active_clients,
+        "max_clients": state.config.max_clients,
+        "running_apps": running_apps,
+        "total_requests": total_requests,
+        "failed_requests": failed_requests,
+        "vram_allocated": stats.vram_allocated,
+        "vram_used": stats.vram_used,
+        "vram_free": stats.vram_free,
+        "gpu_util": stats.gpu_utilization,
+        "active_streams": stats.active_streams,
+        "registered_kernels": stats.registered_kernels,
+        "total_ops": stats.total_ops,
+        "system_active_processes": runtime_snap.active_processes,
+        "system_active_tasks": runtime_snap.active_tasks,
+        "system_queue_head": runtime_snap.queue_head,
+        "system_queue_tail": runtime_snap.queue_tail,
+        "watchdog_alert": runtime_snap.watchdog_alert,
+        "scheduler_paused": paused,
+        "scheduler_rule_count": engine.rule_count(),
+        "scheduler_audit_entries": engine.audit_log().len(),
+        "scheduler_queue_depth": sched_snap.queue_depth,
+        "scheduler_active_jobs": sched_snap.active_jobs,
+        "queued": queued,
+        "active": active,
+        "running": managed_running,
+        "recent_events": recent_events,
     });
     to_json_line(&response)
 }

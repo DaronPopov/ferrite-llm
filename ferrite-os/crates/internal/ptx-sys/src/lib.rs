@@ -334,7 +334,7 @@ impl Default for PTXStableConfig {
             max_streams: 0,
             quiet_init: 0,
             enable_leak_detection: 1,
-            enable_pool_health: 1,
+            enable_pool_health: 0,
             _reserved0: 0,
         }
     }

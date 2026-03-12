@@ -8,14 +8,20 @@ repository = "https://github.com/DaronPopov/ferrite-llm"
 homepage = "https://github.com/DaronPopov/ferrite-llm"
 keywords = ["cli", "wasm", "inference", "runtime"]
 categories = ["command-line-utilities"]
+default-run = "ferrite-rt"
 
 [[bin]]
 name = "ferrite-rt"
 path = "src/main.rs"
 
+[[bin]]
+name = "ferrite-rt-runner"
+path = "src/bin/ferrite-rt-runner.rs"
+required-features = ["runtime"]
+
 [dependencies]
 # Ferrite host library
-ferrite-wasm-host = { path = "../ferrite-wasm-host" }
+ferrite-wasm-host = { path = "../ferrite-wasm-host", optional = true }
 
 # CLI
 clap = { version = "4", features = ["derive", "env"] }
@@ -28,15 +34,14 @@ dirs = "5.0"
 walkdir = "2.5"
 
 # WASM runtime
-wasmtime = { version = "27", features = ["component-model", "cranelift"] }
-wasmtime-wasi = "27"
-
-# Optional CUDA support (re-exported for feature detection)
-[dependencies.candle-core]
-version = "0.8"
-optional = true
+wasmtime = { version = "27", features = ["component-model", "cranelift"], optional = true }
+wasmtime-wasi = { version = "27", optional = true }
 
 [features]
-cuda = ["candle-core/cuda", "ferrite-wasm-host/cuda"]
+runtime = ["dep:ferrite-wasm-host", "dep:wasmtime", "dep:wasmtime-wasi"]
+cuda = ["runtime", "ferrite-wasm-host/cuda"]
 tlsf-alloc = ["cuda", "ferrite-wasm-host/tlsf-alloc"]
-default = ["cuda"]
+default = []
+
+[dev-dependencies]
+tempfile = "3"

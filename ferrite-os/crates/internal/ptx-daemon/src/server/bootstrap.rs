@@ -72,7 +72,13 @@ pub(super) fn init_runtime(config: &DaemonConfig) -> io::Result<Arc<PtxRuntime>>
 
     let mut runtime_config = ptx_sys::GPUHotConfig::default();
     runtime_config.max_streams = config.max_streams;
-    runtime_config.pool_fraction = config.pool_fraction;
+    if config.fixed_pool_size_bytes > 0 {
+        runtime_config.pool_fraction = 0.0;
+        runtime_config.fixed_pool_size = config.fixed_pool_size_bytes as usize;
+    } else {
+        runtime_config.pool_fraction = config.pool_fraction;
+        runtime_config.fixed_pool_size = 0;
+    }
     runtime_config.prefer_orin_unified_memory = config.prefer_orin_unified_memory;
     runtime_config.use_managed_pool = config.use_managed_pool;
     runtime_config.enable_leak_detection = config.enable_leak_detection;
@@ -87,13 +93,23 @@ pub(super) fn init_runtime(config: &DaemonConfig) -> io::Result<Arc<PtxRuntime>>
         })?,
     );
 
-    info!(
-        "Runtime initialized with {} streams, pool={:.0}%, orin_um={}, managed_pool={}",
-        config.max_streams,
-        config.pool_fraction * 100.0,
-        config.prefer_orin_unified_memory,
-        config.use_managed_pool
-    );
+    if config.fixed_pool_size_bytes > 0 {
+        info!(
+            "Runtime initialized with {} streams, fixed_pool_size_bytes={}, orin_um={}, managed_pool={}",
+            config.max_streams,
+            config.fixed_pool_size_bytes,
+            config.prefer_orin_unified_memory,
+            config.use_managed_pool
+        );
+    } else {
+        info!(
+            "Runtime initialized with {} streams, pool={:.0}%, orin_um={}, managed_pool={}",
+            config.max_streams,
+            config.pool_fraction * 100.0,
+            config.prefer_orin_unified_memory,
+            config.use_managed_pool
+        );
+    }
 
     // Export runtime/context handles from the daemon process environment so
     // spawned runner subprocesses can inherit the same execution context.

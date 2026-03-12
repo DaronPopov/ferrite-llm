@@ -19,12 +19,12 @@ PTXTLSFAllocator* ptx_tlsf_create_from_pool(void* pool, size_t pool_size, bool d
     allocator->vram_pool_size = pool_size;
     allocator->owns_pool = false;  // External pool, don't free on destroy
     allocator->debug_mode = debug_mode;
-    allocator->warning_threshold = 0.80f;
-    allocator->warning_step = 0.01f;          // 1% utilization step
-    allocator->warning_interval_us = 1000000; // 1s minimum interval
+    allocator->warning_threshold = 0.98f;
+    allocator->warning_step = 0.02f;          // 2% utilization step
+    allocator->warning_interval_us = 3000000; // 3s minimum interval
     allocator->warning_last_ts = 0;
     allocator->warning_last_utilization = 0.0f;
-    allocator->warnings_enabled = true;
+    allocator->warnings_enabled = false;
     allocator->auto_defrag_enabled = true;
 
     // Pre-allocate block header slab — one-time cold-path malloc that
@@ -77,8 +77,10 @@ PTXTLSFAllocator* ptx_tlsf_create_from_pool(void* pool, size_t pool_size, bool d
     allocator->stats.total_blocks = 1;
     allocator->stats.is_healthy = true;
 
-    printf("[TLSF] Allocator created: %.2f MB pool\n",
-           pool_size / (1024.0 * 1024.0));
+    if (ptx_tlsf_debug_enabled()) {
+        printf("[TLSF] Allocator created: %.2f MB pool\n",
+               pool_size / (1024.0 * 1024.0));
+    }
 
     return allocator;
 }
@@ -91,7 +93,9 @@ PTXTLSFAllocator* ptx_tlsf_create(size_t pool_size, bool debug_mode) {
     // Allocate GPU memory pool
     void* pool = ptx_driver_alloc(pool_size);
     if (!pool) {
-        printf("[TLSF] Failed to allocate GPU pool\n");
+        if (ptx_tlsf_debug_enabled()) {
+            printf("[TLSF] Failed to allocate GPU pool\n");
+        }
         return NULL;
     }
 
@@ -119,7 +123,9 @@ void ptx_tlsf_destroy(PTXTLSFAllocator* allocator) {
     allocator->slab_free_list = NULL;
 
     free(allocator);
-    printf("[TLSF] Allocator destroyed\n");
+    if (ptx_tlsf_debug_enabled()) {
+        printf("[TLSF] Allocator destroyed\n");
+    }
 }
 
 void* ptx_tlsf_alloc(PTXTLSFAllocator* allocator, size_t size) {
@@ -139,7 +145,9 @@ void* ptx_tlsf_alloc_debug(PTXTLSFAllocator* allocator, size_t size,
     if (!block) {
         // Pool exhausted
         allocator->stats.fallback_count++;
-        printf("[TLSF] Pool exhausted, allocation failed\n");
+        if (allocator->warnings_enabled || ptx_tlsf_debug_enabled()) {
+            printf("[TLSF] Pool exhausted, allocation failed\n");
+        }
         return NULL;
     }
     
