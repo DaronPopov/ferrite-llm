@@ -41,6 +41,7 @@ Thumbs.db
 /.ferrite/
 /external/aten-ptx/
 /external/candle-ptx/
+/external/cutlass-ptx/
 /external/ferrite-torch/
 /external/ferrite-xla/
 /external/libtorch

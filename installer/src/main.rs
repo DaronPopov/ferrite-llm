@@ -56,6 +56,11 @@ struct SourceDep {
 }
 
 #[derive(Debug, Deserialize)]
+struct SourceDepState {
+    resolved_rev: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct BinaryAsset {
     id: String,
     contract: String,
@@ -428,7 +433,7 @@ fn materialize_layout(ctx: &InstallerContext) -> Result<(), DynError> {
     println!("store_root={}", store_root.display());
 
     for dep in &ctx.graph.source_dep {
-        materialize_source_dep(repo_root, &store_src_root, dep)?;
+        materialize_source_dep(repo_root, &store_root, &store_src_root, dep)?;
     }
 
     for asset in selected_runtime_assets(ctx)? {
@@ -727,43 +732,52 @@ fn selected_runtime_assets<'a>(ctx: &'a InstallerContext) -> Result<Vec<&'a Bina
 
 fn materialize_source_dep(
     repo_root: &Path,
+    store_root: &Path,
     store_src_root: &Path,
     dep: &SourceDep,
 ) -> Result<(), DynError> {
     let target_path = repo_root.join(&dep.target);
-    let store_link = store_src_root.join(&dep.id);
     let manifest_path = store_src_root.join(format!("{}.toml", dep.id));
 
-    write_source_manifest(&manifest_path, dep)?;
+    if !manifest_path.exists() {
+        write_source_manifest(&manifest_path, dep, None)?;
+    }
+
+    let materialized_view = read_source_manifest(&manifest_path)?
+        .resolved_rev
+        .map(|rev| store_root.join("materialized").join(&dep.id).join(rev))
+        .filter(|path| path.exists())
+        .unwrap_or_else(|| {
+            let placeholder = store_src_root.join(&dep.id);
+            let _ = fs::create_dir_all(&placeholder);
+            placeholder
+        });
 
     if target_path.exists() {
-        if store_link.exists() {
+        let target_meta = fs::symlink_metadata(&target_path)?;
+        if target_meta.file_type().is_symlink()
+            && fs::read_link(&target_path)
+                .map(|link| link == materialized_view)
+                .unwrap_or(false)
+        {
             println!(
-                "source_dep.{}=legacy-target-present store:{} target:{}",
+                "source_dep.{}=ready store:{} target:{}",
                 dep.id,
-                store_link.display(),
+                materialized_view.display(),
                 target_path.display()
             );
             return Ok(());
         }
 
-        create_symlink(&target_path, &store_link)?;
-        println!(
-            "source_dep.{}=adopted-legacy-target store:{} -> {}",
-            dep.id,
-            store_link.display(),
-            target_path.display()
-        );
-        return Ok(());
+        remove_existing_path(&target_path)?;
     }
 
-    fs::create_dir_all(&store_link)?;
-    create_symlink(&store_link, &target_path)?;
+    create_symlink(&materialized_view, &target_path)?;
     println!(
-        "source_dep.{}=created-managed-view target:{} -> {}",
+        "source_dep.{}=created-managed-view store:{} target:{}",
         dep.id,
-        target_path.display(),
-        store_link.display()
+        materialized_view.display(),
+        target_path.display()
     );
     Ok(())
 }
@@ -937,14 +951,21 @@ fn yes_no(value: bool) -> &'static str {
     }
 }
 
-fn write_source_manifest(path: &Path, dep: &SourceDep) -> Result<(), DynError> {
+fn write_source_manifest(path: &Path, dep: &SourceDep, resolved_rev: Option<&str>) -> Result<(), DynError> {
     let mut file = fs::File::create(path)?;
     writeln!(file, "id = {:?}", dep.id)?;
     writeln!(file, "repo = {:?}", dep.repo)?;
     writeln!(file, "commit = {:?}", dep.commit)?;
     writeln!(file, "subdir = {:?}", dep.subdir)?;
     writeln!(file, "target = {:?}", dep.target)?;
+    if let Some(resolved_rev) = resolved_rev {
+        writeln!(file, "resolved_rev = {:?}", resolved_rev)?;
+    }
     Ok(())
+}
+
+fn read_source_manifest(path: &Path) -> Result<SourceDepState, DynError> {
+    read_toml(path)
 }
 
 fn write_runtime_asset_manifest(path: &Path, asset: &BinaryAsset) -> Result<(), DynError> {
@@ -1212,14 +1233,7 @@ fn update_source_manifest_revision(
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut file = fs::File::create(path)?;
-    writeln!(file, "id = {:?}", dep.id)?;
-    writeln!(file, "repo = {:?}", dep.repo)?;
-    writeln!(file, "commit = {:?}", dep.commit)?;
-    writeln!(file, "resolved_rev = {:?}", resolved_rev)?;
-    writeln!(file, "subdir = {:?}", dep.subdir)?;
-    writeln!(file, "target = {:?}", dep.target)?;
-    Ok(())
+    write_source_manifest(&path, dep, Some(resolved_rev))
 }
 
 fn sanitize_repo_key(repo_url: &str) -> String {
