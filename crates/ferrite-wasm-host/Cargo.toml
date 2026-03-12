@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2021"
 description = "WASM host library for neural inference - Embed AI in any Rust app"
 license = "MIT"
-repository = "https://github.com/DaronPopov/ferrite-llm"
+repository = "https://github.com/DaronPopov/ferrite"
 keywords = ["wasm", "inference", "neural", "llm", "component-model"]
 categories = ["wasm", "science"]
 

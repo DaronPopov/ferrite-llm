@@ -4,7 +4,7 @@ version = "0.3.0"
 edition = "2021"
 description = "Pure Rust LLM inference engine - Core library with GGUF, CUDA, and quantized model support"
 license = "MIT"
-repository = "https://github.com/DaronPopov/ferrite-llm"
+repository = "https://github.com/DaronPopov/ferrite"
 keywords = ["llm", "inference", "cuda", "gguf", "quantized"]
 categories = ["science", "machine-learning"]
 

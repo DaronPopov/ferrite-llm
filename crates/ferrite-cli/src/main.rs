@@ -563,7 +563,7 @@ fn find_repo_root() -> Result<Option<PathBuf>> {
 }
 
 fn default_install_repo_root() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".local/share/ferrite-llm/src/ferrite-llm"))
+    dirs::home_dir().map(|home| home.join(".local/share/ferrite/src/ferrite"))
 }
 
 fn add_repo_checks(report: &mut DoctorReport, repo_root: &Path, profile: &str) {
