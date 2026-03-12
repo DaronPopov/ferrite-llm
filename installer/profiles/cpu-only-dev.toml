@@ -1,0 +1,10 @@
+[profile]
+id = "cpu-only-dev"
+extends = "base"
+host_family = "linux"
+features = []
+validations = ["cargo-check", "wasm-build"]
+
+[profile.providers]
+system = "apt"
+binary_assets = "none"

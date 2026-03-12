@@ -1,0 +1,11 @@
+[system]
+version = 1
+
+[system.family.linux]
+notes = "Primary supported bootstrap target."
+
+[system.family.linux.providers.apt]
+packages = ["build-essential", "ffmpeg", "python3", "python3-venv"]
+
+[system.family.linux.providers.dnf]
+packages = ["gcc", "gcc-c++", "make", "ffmpeg", "python3"]

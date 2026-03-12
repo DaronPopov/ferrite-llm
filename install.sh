@@ -12,6 +12,7 @@ JETSON_MODEL=""
 ENABLE_TLSF_ALLOC="${FERRITE_ENABLE_TLSF_ALLOC:-1}"
 LEGACY_BUILD_EVERYTHING="${FERRITE_BUILD_EVERYTHING:-}"
 PROFILE="${FERRITE_INSTALL_PROFILE:-}"
+APPLY_HOST_BOOTSTRAP=0
 GRAPHICS_JOBS="${FERRITE_GRAPHICS_JOBS:-}"
 SKIP_GRAPHICS_TESTS="${FERRITE_GRAPHICS_SKIP_TESTS:-0}"
 SELECTED_MODULES=()
@@ -25,16 +26,21 @@ usage() {
 Ferrite installer
 
 Usage:
-  install.sh [--profile PROFILE] [--help] [--list-profiles]
+  install.sh [--profile PROFILE] [--apply] [--help] [--list-profiles]
 
 Profiles:
-  runtime   Build the smallest supported Ferrite runtime slice
-  platform  Build runtime + ferrite-os workspace
-  full      Build platform + ferrite-gpu-lang
-  mega      Build the full Ferrite engine stack
+  workstation-nvidia  Desktop/server NVIDIA Linux path
+  jetson              NVIDIA Jetson embedded path
+  cpu-only-dev        CPU-only development path
+
+If --profile is omitted, the installer auto-detects:
+  jetson on supported aarch64 Jetson hosts
+  workstation-nvidia on linux/x86_64
+  cpu-only-dev otherwise
 
 Options:
-  --profile PROFILE  Select install profile. Default: mega
+  --profile PROFILE  Select install profile explicitly
+  --apply            Allow installer-managed host tool installation
   --list-profiles    Print available profiles and exit
   --help, -h         Show this message
 
@@ -47,8 +53,8 @@ Environment:
   FERRITE_SKIP_SMOKES           Set to 1 to skip CUDA smoke tests
 
 Compatibility:
-  FERRITE_BUILD_EVERYTHING=0 maps to --profile runtime
-  FERRITE_BUILD_EVERYTHING=1 maps to --profile mega
+  FERRITE_BUILD_EVERYTHING=0 maps to --profile cpu-only-dev
+  FERRITE_BUILD_EVERYTHING=1 maps to auto/default behavior
 
 Supported platforms:
   x86_64 + NVIDIA GPU (desktop, server, cloud)
@@ -58,10 +64,9 @@ EOF
 
 list_profiles() {
     cat <<'EOF'
-runtime
-platform
-full
-mega
+workstation-nvidia
+jetson
+cpu-only-dev
 EOF
 }
 
@@ -529,6 +534,10 @@ parse_args() {
                 PROFILE="$2"
                 shift 2
                 ;;
+            --apply)
+                APPLY_HOST_BOOTSTRAP=1
+                shift
+                ;;
             --list-profiles)
                 list_profiles
                 exit 0
@@ -542,6 +551,44 @@ parse_args() {
                 ;;
         esac
     done
+}
+
+handoff_to_installer() {
+    local installer_bootstrap="$SRC_DIR/installer/bootstrap/bootstrap.sh"
+    [ -x "$installer_bootstrap" ] || fail "installer bootstrap not found: $installer_bootstrap"
+
+    log "Handing off to declarative installer pipeline"
+    cd "$SRC_DIR"
+
+    if [ -n "$PROFILE" ]; then
+        if [ "$APPLY_HOST_BOOTSTRAP" = "1" ]; then
+            exec "$installer_bootstrap" --profile "$PROFILE" --apply
+        fi
+        exec "$installer_bootstrap" --profile "$PROFILE"
+    fi
+
+    if [ "$APPLY_HOST_BOOTSTRAP" = "1" ]; then
+        exec "$installer_bootstrap" --apply
+    fi
+    exec "$installer_bootstrap"
+}
+
+apply_legacy_profile_mapping() {
+    if [ -n "$PROFILE" ] || [ -z "$LEGACY_BUILD_EVERYTHING" ]; then
+        return 0
+    fi
+
+    case "$LEGACY_BUILD_EVERYTHING" in
+        0)
+            PROFILE="cpu-only-dev"
+            ;;
+        1)
+            PROFILE=""
+            ;;
+        *)
+            fail "unsupported FERRITE_BUILD_EVERYTHING value: $LEGACY_BUILD_EVERYTHING"
+            ;;
+    esac
 }
 
 print_profile_header() {
@@ -622,63 +669,9 @@ EOF
 # ── main ──────────────────────────────────────────────────────────────────────
 
 parse_args "$@"
-configure_profile
+apply_legacy_profile_mapping
 bootstrap_rust
-ensure_rust_targets
-ensure_wasm_tools
 
 mkdir -p "$BIN_DIR"
 refresh_repo
-
-cd "$SRC_DIR"
-
-CUDA_HOME="$(choose_cuda_home)"
-export CUDA_HOME
-export CUDA_PATH="$CUDA_HOME"
-
-detect_cuda_arch
-detect_cuda_version
-export CUDA_ARCH
-
-if detect_jetson; then
-    log "Platform : Jetson ${JETSON_MODEL} (aarch64)"
-else
-    log "Platform : $ARCH"
-fi
-log "CUDA home    : $CUDA_HOME"
-log "CUDA version : $CUDA_VERSION"
-log "CUDA arch(s) : $CUDA_ARCH"
-
-print_profile_header
-
-log "Refreshing Cargo dependencies"
-cargo update
-
-if profile_includes_platform; then
-    log "Refreshing ferrite-os Cargo dependencies"
-    cargo update --manifest-path ferrite-os/Cargo.toml
-fi
-
-build_native_runtime
-build_runtime_workspace
-
-if profile_includes_platform; then
-    build_platform_workspace
-fi
-
-install_runtime_binary
-setup_wasm_prereqs
-build_sample_guest
-run_runtime_smokes
-
-if profile_includes_full; then
-    build_gpu_lang
-fi
-
-if profile_includes_mega; then
-    build_graphics
-fi
-
-run_doctor
-
-print_summary
+handoff_to_installer

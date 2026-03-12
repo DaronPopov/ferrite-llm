@@ -1,0 +1,74 @@
+[[tool]]
+name = "git"
+version_req = "any"
+bootstrap = "system"
+
+[tool.providers.apt]
+packages = ["git"]
+
+[tool.providers.dnf]
+packages = ["git"]
+
+[[tool]]
+name = "curl"
+version_req = "any"
+bootstrap = "system"
+
+[tool.providers.apt]
+packages = ["curl"]
+
+[tool.providers.dnf]
+packages = ["curl"]
+
+[[tool]]
+name = "cmake"
+version_req = ">=3.24"
+bootstrap = "system"
+
+[tool.providers.apt]
+packages = ["cmake"]
+
+[tool.providers.dnf]
+packages = ["cmake"]
+
+[[tool]]
+name = "pkg-config"
+version_req = "any"
+bootstrap = "system"
+
+[tool.providers.apt]
+packages = ["pkg-config"]
+
+[tool.providers.dnf]
+packages = ["pkgconf-pkg-config"]
+
+[[tool]]
+name = "clang"
+version_req = ">=14"
+bootstrap = "system"
+
+[tool.providers.apt]
+packages = ["clang"]
+
+[tool.providers.dnf]
+packages = ["clang"]
+
+[[tool]]
+name = "python3"
+version_req = "any"
+bootstrap = "system"
+
+[tool.providers.apt]
+packages = ["python3"]
+
+[tool.providers.dnf]
+packages = ["python3"]
+
+[[tool]]
+name = "rustup"
+version_req = "stable"
+bootstrap = "user"
+
+[tool.providers.script]
+script_url = "https://sh.rustup.rs"
+script_args = ["-y", "--profile", "minimal"]

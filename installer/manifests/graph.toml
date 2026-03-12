@@ -1,0 +1,109 @@
+[graph]
+version = 1
+state_root = ".ferrite"
+materialization_root = ".ferrite/store"
+
+[[runtime_contract]]
+id = "torch-runtime"
+kind = "torch-cpp-runtime"
+source_deps = ["aten-ptx", "cudarc-ptx", "ferrite-torch"]
+
+[runtime_contract.compat]
+tch = "0.22"
+aten_ptx = "2.7.1-compatible"
+ferrite_torch = "2.7.1-compatible"
+
+[[source_dep]]
+id = "aten-ptx"
+repo = "git@github.com:DaronPopov/ferriterc.git"
+commit = "main"
+subdir = "external/aten-ptx"
+target = "external/aten-ptx"
+
+[[source_dep]]
+id = "candle-ptx"
+repo = "git@github.com:DaronPopov/ferriterc.git"
+commit = "main"
+subdir = "external/candle-ptx"
+target = "external/candle-ptx"
+
+[[source_dep]]
+id = "cudarc-ptx"
+repo = "git@github.com:DaronPopov/ferriterc.git"
+commit = "main"
+subdir = "external/cudarc-ptx"
+target = "external/cudarc-ptx"
+
+[[source_dep]]
+id = "ferrite-torch"
+repo = "git@github.com:DaronPopov/ferriterc.git"
+commit = "main"
+subdir = "external/ferrite-torch"
+target = "external/ferrite-torch"
+
+[[source_dep]]
+id = "ferrite-xla"
+repo = "git@github.com:DaronPopov/ferriterc.git"
+commit = "main"
+subdir = "external/ferrite-xla"
+target = "external/ferrite-xla"
+
+[[binary_asset]]
+id = "torch-runtime-x86_64-cu128"
+contract = "torch-runtime"
+provider = "pytorch-prebuilt"
+version = "2.7.1"
+kind = "libtorch-cpp"
+url = "https://download.pytorch.org/libtorch/cu128/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcu128.zip"
+sha256 = "ae513b437ae99150744ef1d06b02a4ecbbb9275c9ffe540c88909623e3293041"
+target = ".ferrite/assets/libtorch"
+layout = "libtorch"
+
+[binary_asset.compat]
+torch_flavor = "cu128"
+archive = "libtorch-cxx11-abi-shared-with-deps"
+cxx11_abi = true
+tch = "0.22"
+aten_ptx = "2.7.1-compatible"
+ferrite_torch = "2.7.1-compatible"
+
+[binary_asset.machine]
+os = "linux"
+arch = ["x86_64"]
+cuda = "12.8"
+requires = ["nvidia-driver", "shared-libs"]
+
+[[binary_asset]]
+id = "torch-runtime-jetson-system"
+contract = "torch-runtime"
+provider = "jetson-system"
+version = "2.7.1-compatible"
+kind = "libtorch-cpp"
+url = "system://jetson/libtorch"
+sha256 = "system-managed"
+target = ".ferrite/assets/libtorch"
+layout = "system-libtorch"
+
+[binary_asset.compat]
+torch_flavor = "jetson-system"
+archive = "system-installed-libtorch"
+cxx11_abi = true
+tch = "0.22"
+aten_ptx = "2.7.1-compatible"
+ferrite_torch = "2.7.1-compatible"
+
+[binary_asset.machine]
+os = "linux"
+arch = ["aarch64"]
+cuda = "jetson"
+requires = ["nvidia-jetpack", "system-libtorch"]
+
+[[derived_artifact]]
+id = "libptx-os"
+recipe = "make -C ferrite-os lib/libptx_os.so"
+outputs = ["ferrite-os/lib/libptx_os.so"]
+
+[[derived_artifact]]
+id = "env-contract"
+recipe = "generate templates/env.sh.tpl and templates/ferrite-run.tpl"
+outputs = [".ferrite/env/profile.sh", ".ferrite/bin/ferrite-run"]

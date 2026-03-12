@@ -1,5 +1,6 @@
 # Build artifacts
 /target/
+/installer/target/
 /examples/target/
 *.wasm
 !adapters/*.wasm

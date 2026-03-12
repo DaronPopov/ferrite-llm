@@ -30,49 +30,38 @@ curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh 
 ```
 
 That default path now builds the full Ferrite engine stack with the `mega`
-profile.
+equivalent workstation/Jetson profile via the declarative installer pipeline.
 
 Available installer profiles:
 
-- `runtime`: build the smallest supported Ferrite runtime slice
-- `platform`: add the `ferrite-os` workspace build
-- `full`: add `ferrite-gpu-lang`
-- `mega`: build the full Ferrite engine, including `external/ferrite-graphics`
+- `workstation-nvidia`: desktop/server NVIDIA Linux path
+- `jetson`: NVIDIA Jetson embedded path
+- `cpu-only-dev`: CPU-only development path
+
+If no profile is provided, the installer auto-detects:
+
+- `jetson` on supported `aarch64` Jetson hosts
+- `workstation-nvidia` on `linux/x86_64`
+- `cpu-only-dev` otherwise
 
 Examples:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | \
-  bash -s -- --profile full
+  bash -s -- --profile workstation-nvidia
 ```
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | \
-  bash -s -- --profile mega
+  bash -s -- --profile jetson
 ```
 
 What the default one-line install now does:
 
 - clones or updates `ferrite` into `~/.local/share/ferrite/src/ferrite`
-- refreshes Cargo dependencies
-- builds `ferrite-os/lib/libptx_os.so`
-- builds the main `ferrite-llm` Rust workspace
-- builds the `ferrite-os` Rust workspace
-- builds `ferrite-gpu-lang`
-- configures, builds, tests, and installs `external/ferrite-graphics`
-- installs `ferrite-rt` into `~/.local/bin`
-- provisions WASM prerequisites with `ferrite-rt setup`
-- builds the sample guest component
-- verifies the owned custom CUDA kernel path with `custom-kernel-smoke`
-- verifies Ferrite's direct `ug-cuda` path with `ug-cuda-smoke`
-- runs `ferrite-rt doctor --profile mega` to validate the installed stack
-
-Additional profile behavior:
-
-- `runtime` skips the larger platform/graphics layers
-- `platform` skips `ferrite-gpu-lang` and `ferrite-graphics`
-- `full` skips `ferrite-graphics`
-- `mega` is the default full-engine path
+- hands off to `installer/bootstrap/bootstrap.sh`
+- auto-detects the appropriate machine profile when none is specified
+- bootstraps host tools, pinned source deps, runtime assets, env, build, and validation through the managed installer pipeline
 
 Requirements:
 
@@ -83,20 +72,19 @@ What it bootstraps automatically in user space:
 
 - Rust via `rustup` if Rust is missing
 - repo download via `git` if available, otherwise a source tarball
-- `ferrite-rt`
-- WASM prerequisites and sample component build
+- installer-managed source/materialization state under `.ferrite/`
 
 Installer notes:
 
-- on `aarch64` Jetsons, the installer now detects the platform and prefers `/usr/local/cuda-arm64` when present
+- on `aarch64` Jetsons, the installer now auto-selects the embedded profile and uses the Jetson/system torch runtime provider path
 - the install path is intended to work on desktop Linux and Jetson-class ARM Linux with CUDA already installed
 - TLSF allocator is built by default; set `FERRITE_ENABLE_TLSF_ALLOC=0` to skip it
 
-The installer stays in user space. It does not attempt `apt`, `dnf`, or system package changes.
+By default the installer stays in user space. Pass `--apply` if you want it to install missing host tools through the configured system provider.
 `FERRITE_BUILD_EVERYTHING` is still accepted for compatibility:
 
-- `FERRITE_BUILD_EVERYTHING=0` maps to `--profile runtime`
-- `FERRITE_BUILD_EVERYTHING=1` maps to `--profile mega`
+- `FERRITE_BUILD_EVERYTHING=0` maps to `--profile cpu-only-dev`
+- `FERRITE_BUILD_EVERYTHING=1` maps to the auto/default profile selection
 
 ## Quick Run
 
