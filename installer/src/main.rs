@@ -639,10 +639,15 @@ fn build_profile(ctx: &InstallerContext) -> Result<(), DynError> {
     )?;
     println!("build.native-runtime=ok");
 
+    let workspace_build_cmd = if profile_needs_torch(ctx) {
+        "cargo build --workspace"
+    } else {
+        "cargo build --workspace --exclude ferrite-torch"
+    };
     run_shell_in_repo(
         repo_root,
         &env_script,
-        "cargo build --workspace",
+        workspace_build_cmd,
         "build workspace",
     )?;
     println!("build.workspace=ok");
@@ -692,10 +697,15 @@ fn validate_profile(ctx: &InstallerContext) -> Result<(), DynError> {
     println!("profile={}", ctx.profile.profile.id);
     println!("env_script={}", env_script.display());
 
+    let workspace_check_cmd = if profile_needs_torch(ctx) {
+        "cargo check --workspace"
+    } else {
+        "cargo check --workspace --exclude ferrite-torch"
+    };
     run_shell_in_repo(
         repo_root,
         &env_script,
-        "cargo check --workspace",
+        workspace_check_cmd,
         "validate workspace check",
     )?;
     println!("validate.workspace-check=ok");

@@ -61,11 +61,8 @@ Build the guest:
 
 ```bash
 cargo build -p mistral-inference --target wasm32-wasip1 --release
-wasm-tools component embed wit \
-  target/wasm32-wasip1/release/mistral_inference.wasm \
-  -o target/wasm32-wasip1/release/mistral_inference.embed.wasm
 wasm-tools component new \
-  target/wasm32-wasip1/release/mistral_inference.embed.wasm \
+  target/wasm32-wasip1/release/mistral_inference.wasm \
   --adapt adapters/wasi_snapshot_preview1.reactor.wasm \
   -o target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```

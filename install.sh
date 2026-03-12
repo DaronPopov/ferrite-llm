@@ -382,11 +382,8 @@ build_sample_guest() {
     fi
 
     cargo build -p mistral-inference --target "$wasm_target" --release
-    wasm-tools component embed wit \
-      "target/${wasm_target}/release/mistral_inference.wasm" \
-      -o "target/${wasm_target}/release/mistral_inference.embed.wasm"
     wasm-tools component new \
-      "target/${wasm_target}/release/mistral_inference.embed.wasm" \
+      "target/${wasm_target}/release/mistral_inference.wasm" \
       --adapt adapters/wasi_snapshot_preview1.reactor.wasm \
       -o "target/${wasm_target}/release/mistral_inference.component.wasm"
     record_result "wasm-guest" "built" "target/${wasm_target}/release/mistral_inference.component.wasm"

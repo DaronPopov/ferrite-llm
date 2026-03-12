@@ -68,9 +68,7 @@ ferrite-rt setup
 cargo build --target wasm32-wasip1 --release
 
 # Componentize
-wasm-tools component embed wit target/wasm32-wasip1/release/my_ai.wasm \
-  -o my_ai.embed.wasm
-wasm-tools component new my_ai.embed.wasm \
+wasm-tools component new target/wasm32-wasip1/release/my_ai.wasm \
   --adapt wasi_snapshot_preview1.reactor.wasm \
   -o my_ai.component.wasm
 
