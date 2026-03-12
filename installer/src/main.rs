@@ -576,17 +576,22 @@ fn generate_env(ctx: &InstallerContext) -> Result<(), DynError> {
     let env_template = fs::read_to_string(ctx.root.join("templates/env.sh.tpl"))?;
     let run_template = fs::read_to_string(ctx.root.join("templates/ferrite-run.tpl"))?;
 
-    let libtorch_path = resolved_libtorch_path(&state_root, ctx)?;
     let runtime_lib_dir = repo_root.join("ferrite-os/lib");
-    let libtorch_lib_dir = libtorch_path.join("lib");
-    let ld_library_path = if libtorch_lib_dir.is_dir() {
-        format!(
-            "{}:{}",
-            runtime_lib_dir.display(),
-            libtorch_lib_dir.display()
-        )
+    let (libtorch_path, ld_library_path) = if profile_needs_torch(ctx) {
+        let libtorch_path = resolved_libtorch_path(&state_root, ctx)?;
+        let libtorch_lib_dir = libtorch_path.join("lib");
+        let ld_library_path = if libtorch_lib_dir.is_dir() {
+            format!(
+                "{}:{}",
+                runtime_lib_dir.display(),
+                libtorch_lib_dir.display()
+            )
+        } else {
+            runtime_lib_dir.display().to_string()
+        };
+        (libtorch_path.display().to_string(), ld_library_path)
     } else {
-        runtime_lib_dir.display().to_string()
+        ("".to_string(), runtime_lib_dir.display().to_string())
     };
 
     let env_script_path = env_dir.join("profile.sh");
@@ -595,7 +600,7 @@ fn generate_env(ctx: &InstallerContext) -> Result<(), DynError> {
     let env_content = env_template
         .replace("{{repo_root}}", &repo_root.display().to_string())
         .replace("{{state_root}}", &state_root.display().to_string())
-        .replace("{{libtorch_path}}", &libtorch_path.display().to_string())
+        .replace("{{libtorch_path}}", &libtorch_path)
         .replace("{{runtime_lib_path}}", &ld_library_path);
     fs::write(&env_script_path, env_content)?;
 
@@ -607,7 +612,9 @@ fn generate_env(ctx: &InstallerContext) -> Result<(), DynError> {
 
     println!("env_script={}", env_script_path.display());
     println!("runner={}", ferrite_run_path.display());
-    println!("libtorch_path={}", libtorch_path.display());
+    if profile_needs_torch(ctx) {
+        println!("libtorch_path={}", libtorch_path);
+    }
     println!("ld_library_path={ld_library_path}");
 
     Ok(())
