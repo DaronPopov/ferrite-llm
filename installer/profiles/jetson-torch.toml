@@ -1,10 +1,10 @@
 [profile]
-id = "jetson"
+id = "jetson-torch"
 extends = "base"
 host_family = "linux"
-features = ["capture"]
+features = ["torch", "capture"]
 validations = ["jetson-cuda", "cargo-check", "doctor"]
-runtime_assets = []
+runtime_assets = ["torch-runtime-jetson-system"]
 
 [profile.providers]
 system = "apt"
