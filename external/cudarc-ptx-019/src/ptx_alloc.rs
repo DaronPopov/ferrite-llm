@@ -8,6 +8,18 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::driver::sys::CUdeviceptr;
 
 #[cfg(feature = "ptx-alloc")]
+pub fn enabled() -> bool {
+    std::env::var("FERRITE_TLSF_ALLOC")
+        .map(|value| !matches!(value.as_str(), "0" | "false" | "False" | "FALSE"))
+        .unwrap_or(false)
+}
+
+#[cfg(not(feature = "ptx-alloc"))]
+pub fn enabled() -> bool {
+    false
+}
+
+#[cfg(feature = "ptx-alloc")]
 static GLOBAL_RUNTIME: OnceLock<Arc<ptx_runtime::PtxRuntime>> = OnceLock::new();
 #[cfg(feature = "ptx-alloc")]
 static PTR_MAP: OnceLock<Mutex<HashMap<CUdeviceptr, Arc<GpuPtr>>>> = OnceLock::new();

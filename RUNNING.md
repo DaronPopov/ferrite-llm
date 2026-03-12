@@ -234,6 +234,12 @@ Benchmark it with:
 ```bash
 cargo run -p ferrite-core --features cuda --example ug-cuda-bench
 ```
+
+Compare TLSF vs non-TLSF on the same benchmark with:
+
+```bash
+./scripts/bench_ug_cuda_tlsf.sh
+```
 - [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs)
 - [custom-attention-bench.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-attention-bench.rs)
 

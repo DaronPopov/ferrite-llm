@@ -681,8 +681,12 @@ pub unsafe fn malloc_async(
 ) -> Result<sys::CUdeviceptr, DriverError> {
     #[cfg(feature = "ptx-alloc")]
     {
-        let _ = stream;
-        crate::ptx_alloc::tlsf_malloc(num_bytes)
+        if crate::ptx_alloc::enabled() {
+            let _ = stream;
+            crate::ptx_alloc::tlsf_malloc(num_bytes)
+        } else {
+            malloc_async_original(stream, num_bytes)
+        }
     }
 
     #[cfg(not(feature = "ptx-alloc"))]
@@ -710,7 +714,11 @@ pub(crate) unsafe fn malloc_async_original(
 pub unsafe fn malloc_sync(num_bytes: usize) -> Result<sys::CUdeviceptr, DriverError> {
     #[cfg(feature = "ptx-alloc")]
     {
-        crate::ptx_alloc::tlsf_malloc(num_bytes)
+        if crate::ptx_alloc::enabled() {
+            crate::ptx_alloc::tlsf_malloc(num_bytes)
+        } else {
+            malloc_sync_original(num_bytes)
+        }
     }
 
     #[cfg(not(feature = "ptx-alloc"))]
@@ -820,8 +828,12 @@ pub unsafe fn mem_prefetch_async(
 pub unsafe fn free_async(dptr: sys::CUdeviceptr, stream: sys::CUstream) -> Result<(), DriverError> {
     #[cfg(feature = "ptx-alloc")]
     {
-        let _ = stream;
-        crate::ptx_alloc::tlsf_free(dptr)
+        if crate::ptx_alloc::enabled() {
+            let _ = stream;
+            crate::ptx_alloc::tlsf_free(dptr)
+        } else {
+            free_async_original(dptr, stream)
+        }
     }
 
     #[cfg(not(feature = "ptx-alloc"))]
@@ -847,7 +859,11 @@ pub(crate) unsafe fn free_async_original(
 pub unsafe fn free_sync(dptr: sys::CUdeviceptr) -> Result<(), DriverError> {
     #[cfg(feature = "ptx-alloc")]
     {
-        crate::ptx_alloc::tlsf_free(dptr)
+        if crate::ptx_alloc::enabled() {
+            crate::ptx_alloc::tlsf_free(dptr)
+        } else {
+            free_sync_original(dptr)
+        }
     }
 
     #[cfg(not(feature = "ptx-alloc"))]

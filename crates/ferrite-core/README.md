@@ -98,6 +98,12 @@ Benchmark:
 cargo run -p ferrite-core --features cuda --example ug-cuda-bench
 ```
 
+TLSF comparison:
+
+```bash
+./scripts/bench_ug_cuda_tlsf.sh
+```
+
 ## License
 
 MIT
