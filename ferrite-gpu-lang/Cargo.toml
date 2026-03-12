@@ -17,20 +17,28 @@ ferrite-apps = { path = "../ferrite-os/crates/public/ferrite-apps" }
 libc = "0.2"
 anyhow = "1.0"
 tch = { version = "0.22", optional = true }
-# External optional deps — enable with features when external repos are available
-# aten-ptx = { path = "../external/aten-ptx", optional = true }
-# candle-ptx = { path = "../external/candle-ptx", optional = true }
-# onnxruntime-ptx = { path = "../external/onnxruntime-ptx", optional = true }
-# cudarc = { path = "../external/cudarc-ptx", optional = true, features = ["ptx-alloc"] }
+aten-ptx = { path = "../external/aten-ptx", optional = true }
+candle-ptx = { path = "../external/candle-ptx", optional = true }
+cudarc = { path = "../external/cudarc-ptx", optional = true, features = ["ptx-alloc"] }
 rlsf = "0.2.1"
 opencv = { version = "0.93", optional = true, default-features = false, features = ["videoio", "imgproc"] }
 
 [features]
-default = []
-torch = ["dep:tch"]
-# candle = ["dep:candle-ptx", "dep:cudarc"]
-# onnxruntime = ["dep:onnxruntime-ptx"]
+default = ["cuda-12080"]
+torch = ["dep:tch", "dep:aten-ptx", "dep:cudarc"]
+candle = ["dep:candle-ptx", "dep:cudarc"]
 capture = ["dep:opencv"]
+cuda-11080 = ["cudarc/cuda-11080"]
+cuda-12000 = ["cudarc/cuda-12000"]
+cuda-12010 = ["cudarc/cuda-12010"]
+cuda-12020 = ["cudarc/cuda-12020"]
+cuda-12030 = ["cudarc/cuda-12030"]
+cuda-12040 = ["cudarc/cuda-12040"]
+cuda-12050 = ["cudarc/cuda-12050"]
+cuda-12060 = ["cudarc/cuda-12060"]
+cuda-12080 = ["cudarc/cuda-12080"]
+cuda-12090 = ["cudarc/cuda-12090"]
+cuda-13000 = ["cudarc/cuda-13000"]
 
 # ── Tests ─────────────────────────────────────────────────────────
 

@@ -35,6 +35,15 @@ Thumbs.db
 # ferrite-os generated artifacts
 /ferrite-os/build/ptx_env.mk
 /ferrite-os/lib/
+/ferrite-os/target/
+
+# installer-managed state and materialized runtimes
+/.ferrite/
+/external/aten-ptx/
+/external/candle-ptx/
+/external/ferrite-torch/
+/external/ferrite-xla/
+/external/libtorch
 
 # ferrite-graphics cmake build cache (machine-specific generated files)
 /external/ferrite-graphics/build/

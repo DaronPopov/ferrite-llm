@@ -263,6 +263,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aten-ptx"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "cc",
+ "libc",
+ "ptx-runtime",
+ "ptx-sys",
+ "tch",
+]
+
+[[package]]
 name = "atomic-waker"
 version = "1.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -680,6 +692,15 @@ dependencies = [
  "safetensors 0.7.0",
  "serde",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "candle-ptx"
+version = "0.1.0"
+dependencies = [
+ "candle-core 0.8.4",
+ "cudarc 0.13.9",
+ "ptx-runtime",
 ]
 
 [[package]]
@@ -1369,8 +1390,10 @@ version = "0.13.9"
 dependencies = [
  "half",
  "libloading 0.8.9",
+ "no-std-compat",
  "ptx-runtime",
  "ptx-sys",
+ "spin",
 ]
 
 [[package]]
@@ -2126,6 +2149,9 @@ name = "ferrite-gpu-lang"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aten-ptx",
+ "candle-ptx",
+ "cudarc 0.13.9",
  "ferrite-apps",
  "libc",
  "opencv",
@@ -4234,6 +4260,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "no-std-compat"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6331,6 +6363,12 @@ checksum = "c3e17e880bafaeb362a7b751ec46bdc5b61445a188f80e0606e68167cd540fa3"
 dependencies = [
  "smallvec 1.15.1",
 ]
+
+[[package]]
+name = "spin"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "spm_precompiled"
