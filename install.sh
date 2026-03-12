@@ -9,7 +9,7 @@ PREFIX="${FERRITE_PREFIX:-$HOME/.local}"
 BIN_DIR="$PREFIX/bin"
 ARCH="$(uname -m)"
 JETSON_MODEL=""
-ENABLE_TLSF_ALLOC="${FERRITE_ENABLE_TLSF_ALLOC:-0}"
+ENABLE_TLSF_ALLOC="${FERRITE_ENABLE_TLSF_ALLOC:-1}"
 LEGACY_BUILD_EVERYTHING="${FERRITE_BUILD_EVERYTHING:-}"
 PROFILE="${FERRITE_INSTALL_PROFILE:-}"
 GRAPHICS_JOBS="${FERRITE_GRAPHICS_JOBS:-}"
@@ -40,7 +40,7 @@ Options:
 
 Environment:
   FERRITE_INSTALL_PROFILE       Default install profile
-  FERRITE_ENABLE_TLSF_ALLOC     Build ferrite-rt with TLSF allocator support
+  FERRITE_ENABLE_TLSF_ALLOC     Build ferrite-rt with TLSF allocator support (default: 1)
   FERRITE_GRAPHICS_JOBS         Override parallelism for ferrite-graphics build
   FERRITE_GRAPHICS_SKIP_TESTS   Skip ferrite-graphics ctest when set to 1
   FERRITE_CUDA_ARCH             Override detected CUDA arch (e.g. "87" or "75;86")
@@ -601,7 +601,7 @@ Quick run:
     $SRC_DIR/target/${wasm_target}/release/mistral_inference.component.wasm
 
 TLSF runtime toggle:
-  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'FERRITE_TLSF_ALLOC=1 ferrite-rt info'; else printf 're-run install with FERRITE_ENABLE_TLSF_ALLOC=1 to build TLSF support'; fi)
+  $(if [ "$ENABLE_TLSF_ALLOC" = "1" ]; then printf 'FERRITE_TLSF_ALLOC=1 ferrite-rt info'; else printf 're-run install with FERRITE_ENABLE_TLSF_ALLOC=1 to build TLSF support (enabled by default)'; fi)
 EOF
 }
 
