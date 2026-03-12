@@ -4,6 +4,7 @@ members = [
     "crates/ferrite-wasm-host",
     "crates/ferrite-sdk",
     "crates/ferrite-cli",
+    "external/ferrite-torch",
     "examples/wasm/hello-inference",
     "examples/wasm/mistral-inference",
     "examples/orin-inference",
