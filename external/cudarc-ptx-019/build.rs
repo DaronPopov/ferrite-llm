@@ -258,6 +258,7 @@ fn link_searches(major: usize, minor: usize) -> Vec<PathBuf> {
     let typical_locations = [
         "/usr",
         "/usr/local/cuda",
+        "/usr/local/cuda-arm64",
         "/opt/cuda",
         "/usr/lib/cuda",
         "C:/Program Files/NVIDIA GPU Computing Toolkit",
@@ -297,15 +298,23 @@ fn link_searches(major: usize, minor: usize) -> Vec<PathBuf> {
                 "lib/Win32".into(),
                 "lib/x86_64".into(),
                 "lib/x86_64-linux-gnu".into(),
+                "lib/aarch64-linux-gnu".into(),
                 "lib64".into(),
                 "lib64/stubs".into(),
                 "targets/x86_64-linux".into(),
                 "targets/x86_64-linux/lib".into(),
                 "targets/x86_64-linux/lib/stubs".into(),
+                "targets/aarch64-linux".into(),
+                "targets/aarch64-linux/lib".into(),
+                "targets/aarch64-linux/lib/stubs".into(),
+                "targets/sbsa-linux".into(),
+                "targets/sbsa-linux/lib".into(),
+                "targets/sbsa-linux/lib/stubs".into(),
                 // see issue #260
                 std::format!("lib/{major}.{minor}/x64"),
                 // see issue #260
                 std::format!("lib/{major}.{minor}/x86_64"),
+                std::format!("lib/{major}.{minor}/aarch64"),
             ]
             .iter()
             .map(|p| root.join(p))

@@ -216,7 +216,7 @@ fn find_cuda_kernels() -> Option<PathBuf> {
     let common = [
         "/usr/local/cuda", "/usr/local/cuda-12.9", "/usr/local/cuda-12.8",
         "/usr/local/cuda-12.6", "/usr/local/cuda-12",
-        "/opt/cuda", "/usr/lib/cuda",
+        "/usr/local/cuda-arm64", "/opt/cuda", "/usr/lib/cuda",
     ];
     for p in &common {
         let p = PathBuf::from(p);

@@ -40,11 +40,18 @@ fn main() {
         println!("cargo:warning=Found CUDA at: {}", cuda_path.display());
     }
 
-    let cuda_lib = if cuda_path.join("lib64").exists() {
-        cuda_path.join("lib64")
-    } else {
-        cuda_path.join("lib")
-    };
+    let cuda_lib = [
+        cuda_path.join("lib64"),
+        cuda_path.join("lib"),
+        cuda_path.join("targets/aarch64-linux/lib"),
+        cuda_path.join("targets/x86_64-linux/lib"),
+        cuda_path.join("targets/sbsa-linux/lib"),
+        cuda_path.join("lib/aarch64-linux-gnu"),
+        cuda_path.join("lib/x86_64-linux-gnu"),
+    ]
+    .into_iter()
+    .find(|path| path.exists())
+    .unwrap_or_else(|| cuda_path.join("lib"));
 
     // Project paths
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
