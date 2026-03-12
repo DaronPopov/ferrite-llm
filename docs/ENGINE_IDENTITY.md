@@ -38,33 +38,33 @@ The correct mental model is:
 `one engine, one tree, many layers`
 
 For the visual and structural version, see
-[Architecture](/home/daron/llm_engine/fer_llm/ferrite/docs/ARCHITECTURE.md).
+[Architecture](ARCHITECTURE.md).
 
 ## Layer Map
 
 Product/runtime layer:
 
-- [`crates/ferrite-cli`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-cli)
-- [`crates/ferrite-wasm-host`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-wasm-host)
-- [`crates/ferrite-core`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core)
-- [`crates/ferrite-sdk`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-sdk)
+- [`crates/ferrite-cli`](../crates/ferrite-cli)
+- [`crates/ferrite-wasm-host`](../crates/ferrite-wasm-host)
+- [`crates/ferrite-core`](../crates/ferrite-core)
+- [`crates/ferrite-sdk`](../crates/ferrite-sdk)
 
 Guest/example layer:
 
-- [`examples/wasm`](/home/daron/llm_engine/fer_llm/ferrite/examples/wasm)
-- [`examples/orin-inference`](/home/daron/llm_engine/fer_llm/ferrite/examples/orin-inference)
+- [`examples/wasm`](../examples/wasm)
+- [`examples/orin-inference`](../examples/orin-inference)
 
 Platform substrate:
 
-- [`ferrite-os`](/home/daron/llm_engine/fer_llm/ferrite/ferrite-os)
+- [`ferrite-os`](../ferrite-os)
 
 Programmable GPU layer:
 
-- [`ferrite-gpu-lang`](/home/daron/llm_engine/fer_llm/ferrite/ferrite-gpu-lang)
+- [`ferrite-gpu-lang`](../ferrite-gpu-lang)
 
 Optional extended subsystem:
 
-- [`external/ferrite-graphics`](/home/daron/llm_engine/fer_llm/ferrite/external/ferrite-graphics)
+- [`external/ferrite-graphics`](../external/ferrite-graphics)
 
 ## Monorepo Principle
 

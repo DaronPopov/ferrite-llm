@@ -3,7 +3,7 @@
 This guide is the shortest engine-level runbook for Ferrite.
 
 For the high-level explanation of what the repo is, read
-[Architecture](/home/daron/llm_engine/fer_llm/ferrite/docs/ARCHITECTURE.md) first.
+[Architecture](ARCHITECTURE.md) first.
 
 ## CLI Shape
 

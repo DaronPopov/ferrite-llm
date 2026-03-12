@@ -1,7 +1,7 @@
 PTX-OS Benchmark Run
 Timestamp: Sat Feb  7 05:39:58 PST 2026
 Host: daron-ROG-Strix-G15CE-G15CE
-Workspace: /home/daron/fdfd/ferriterc/ferrite-os
+Workspace: <ferrite-os>
 Commit: da43a5613f8640a21f03b1fda399c40a4e6d9f98
 GPU: Failed to initialize NVML: Unknown Error
 
@@ -12,16 +12,16 @@ NVCC=/usr/local/cuda/bin/nvcc
 CUDA_VERSION=12.6
 
 === Build (core + rust) ===
-cmd: /home/daron/fdfd/ferriterc/ferrite-os/scripts/ptx_build.sh all
+cmd: <ferrite-os>/scripts/ptx_build.sh all
 CUDA: /usr/local/cuda
 nvcc: NVIDIA (R) Cuda compiler driver
 GPU SM: 
 CUDA_PATH=/usr/local/cuda cargo build --release
-   Compiling ptx-runner v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-runner)
+   Compiling ptx-runner v0.1.0 (<ferrite-os>/internal/ptx-runner)
     Finished `release` profile [optimized] target(s) in 3.36s
 
 === Runtime Jitter Benchmark ===
-cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example jitter_benchmark
+cmd: bash -lc cd '<ferrite-os>' && cargo run --release -p ptx-runtime --example jitter_benchmark
    Compiling proc-macro2 v1.0.106
    Compiling quote v1.0.44
    Compiling unicode-ident v1.0.22
@@ -43,7 +43,7 @@ cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release 
    Compiling log v0.4.29
    Compiling memchr v2.7.6
    Compiling parking_lot_core v0.9.12
-   Compiling ptx-sys v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-sys)
+   Compiling ptx-sys v0.1.0 (<ferrite-os>/internal/ptx-sys)
    Compiling pin-project-lite v0.2.16
    Compiling tracing-core v0.1.36
    Compiling deranged v0.5.5
@@ -74,7 +74,7 @@ cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release 
    Compiling parking_lot v0.12.5
    Compiling cc v1.2.55
    Compiling petgraph v0.6.5
-   Compiling ptx-kernels v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-kernels)
+   Compiling ptx-kernels v0.1.0 (<ferrite-os>/internal/ptx-kernels)
    Compiling tracing-serde v0.2.0
    Compiling matchers v0.2.0
    Compiling zerocopy-derive v0.8.38
@@ -88,11 +88,11 @@ cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release 
    Compiling half v2.7.1
    Compiling rand_chacha v0.3.1
    Compiling rand v0.8.5
-   Compiling ptx-runtime v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/ptx-runtime)
-   Compiling ptx-tensor v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-tensor)
-   Compiling ptx-compute v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-compute)
-   Compiling ptx-compiler v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-compiler)
-   Compiling ptx-autograd v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-autograd)
+   Compiling ptx-runtime v0.1.0 (<ferrite-os>/ptx-runtime)
+   Compiling ptx-tensor v0.1.0 (<ferrite-os>/internal/ptx-tensor)
+   Compiling ptx-compute v0.1.0 (<ferrite-os>/internal/ptx-compute)
+   Compiling ptx-compiler v0.1.0 (<ferrite-os>/internal/ptx-compiler)
+   Compiling ptx-autograd v0.1.0 (<ferrite-os>/internal/ptx-autograd)
     Finished `release` profile [optimized] target(s) in 10.80s
      Running `target/release/examples/jitter_benchmark`
 ╔════════════════════════════════════════════════════════════╗

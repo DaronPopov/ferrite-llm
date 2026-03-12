@@ -286,11 +286,12 @@ refresh_repo() {
             git -C "$SRC_DIR" fetch origin
             git -C "$SRC_DIR" checkout main
             git -C "$SRC_DIR" pull --ff-only origin main
+            git -C "$SRC_DIR" submodule update --init --recursive
             return 0
         fi
 
         log "Cloning $REPO_URL into $SRC_DIR"
-        git clone "$REPO_URL" "$SRC_DIR"
+        git clone --recurse-submodules "$REPO_URL" "$SRC_DIR"
         return 0
     fi
 

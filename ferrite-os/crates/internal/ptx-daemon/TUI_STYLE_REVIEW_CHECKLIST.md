@@ -31,7 +31,7 @@ Use this checklist for any PR that touches `crates/internal/ptx-daemon/src/tui/*
 ## Validation
 
 ```bash
-cd /home/daron/fdfd/ferriterc/ferrite-os
+cd ./ferrite-os
 cargo check -p ferrite-daemon
 ```
 

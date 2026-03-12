@@ -1,0 +1,3 @@
+[submodule "external/ferrite-graphics"]
+	path = external/ferrite-graphics
+	url = https://github.com/DaronPopov/ferrite-graphics.git

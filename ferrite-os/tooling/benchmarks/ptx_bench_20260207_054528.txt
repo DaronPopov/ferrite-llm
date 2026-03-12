@@ -1,7 +1,7 @@
 PTX-OS Benchmark Run
 Timestamp: Sat Feb  7 05:45:28 AM PST 2026
 Host: daron-ROG-Strix-G15CE-G15CE
-Workspace: /home/daron/fdfd/ferriterc/ferrite-os
+Workspace: <ferrite-os>
 Commit: da43a5613f8640a21f03b1fda399c40a4e6d9f98
 GPU: NVIDIA GeForce RTX 3070, 560.35.05, 8192 MiB
 
@@ -14,7 +14,7 @@ GPU_SM=86
 PTX_GPU_SM=sm_86
 
 === Build (core + rust) ===
-cmd: /home/daron/fdfd/ferriterc/ferrite-os/scripts/ptx_build.sh all
+cmd: <ferrite-os>/scripts/ptx_build.sh all
 CUDA: /usr/local/cuda
 nvcc: NVIDIA (R) Cuda compiler driver
 GPU SM: 86
@@ -22,14 +22,14 @@ CUDA_PATH=/usr/local/cuda cargo build --release
     Finished `release` profile [optimized] target(s) in 0.01s
 
 === Runtime Jitter Benchmark ===
-cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example jitter_benchmark
-   Compiling ptx-sys v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-sys)
-   Compiling ptx-runtime v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/ptx-runtime)
-   Compiling ptx-kernels v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-kernels)
-   Compiling ptx-tensor v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-tensor)
-   Compiling ptx-compute v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-compute)
-   Compiling ptx-compiler v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-compiler)
-   Compiling ptx-autograd v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-autograd)
+cmd: bash -lc cd '<ferrite-os>' && cargo run --release -p ptx-runtime --example jitter_benchmark
+   Compiling ptx-sys v0.1.0 (<ferrite-os>/internal/ptx-sys)
+   Compiling ptx-runtime v0.1.0 (<ferrite-os>/ptx-runtime)
+   Compiling ptx-kernels v0.1.0 (<ferrite-os>/internal/ptx-kernels)
+   Compiling ptx-tensor v0.1.0 (<ferrite-os>/internal/ptx-tensor)
+   Compiling ptx-compute v0.1.0 (<ferrite-os>/internal/ptx-compute)
+   Compiling ptx-compiler v0.1.0 (<ferrite-os>/internal/ptx-compiler)
+   Compiling ptx-autograd v0.1.0 (<ferrite-os>/internal/ptx-autograd)
     Finished `release` profile [optimized] target(s) in 4.14s
      Running `target/release/examples/jitter_benchmark`
 ╔════════════════════════════════════════════════════════════╗
@@ -177,8 +177,8 @@ cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release 
 [Ferrite-OS] Shutdown complete
 
 === Fused Kernel Benchmark ===
-cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example fused_kernel_benchmark
-   Compiling ptx-runtime v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/ptx-runtime)
+cmd: bash -lc cd '<ferrite-os>' && cargo run --release -p ptx-runtime --example fused_kernel_benchmark
+   Compiling ptx-runtime v0.1.0 (<ferrite-os>/ptx-runtime)
     Finished `release` profile [optimized] target(s) in 2.48s
      Running `target/release/examples/fused_kernel_benchmark`
 ╔════════════════════════════════════════════════════════════╗
@@ -326,8 +326,8 @@ cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release 
 [Ferrite-OS] Shutdown complete
 
 === Candle Performance Benchmark ===
-cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-runtime --example candle_performance_benchmark
-   Compiling ptx-runtime v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/ptx-runtime)
+cmd: bash -lc cd '<ferrite-os>' && cargo run --release -p ptx-runtime --example candle_performance_benchmark
+   Compiling ptx-runtime v0.1.0 (<ferrite-os>/ptx-runtime)
     Finished `release` profile [optimized] target(s) in 2.48s
      Running `target/release/examples/candle_performance_benchmark`
 ╔════════════════════════════════════════════════════════════╗
@@ -557,10 +557,10 @@ cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release 
 [Ferrite-OS] Shutdown complete
 
 === Dynamic-Shape Benchmark ===
-cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-tensor --example bench_dynamic_shapes
-   Compiling ptx-sys v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-sys)
-   Compiling ptx-runtime v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/ptx-runtime)
-   Compiling ptx-tensor v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-tensor)
+cmd: bash -lc cd '<ferrite-os>' && cargo run --release -p ptx-tensor --example bench_dynamic_shapes
+   Compiling ptx-sys v0.1.0 (<ferrite-os>/internal/ptx-sys)
+   Compiling ptx-runtime v0.1.0 (<ferrite-os>/ptx-runtime)
+   Compiling ptx-tensor v0.1.0 (<ferrite-os>/internal/ptx-tensor)
     Finished `release` profile [optimized] target(s) in 4.10s
      Running `target/release/examples/bench_dynamic_shapes`
 === PTX-OS Dynamic-Shape Inference Benchmark ===
@@ -619,8 +619,8 @@ final frag: 0.00% | largest free 4.74 GB
 [Ferrite-OS] Shutdown complete
 
 === Elementwise Ops Benchmark ===
-cmd: bash -lc cd '/home/daron/fdfd/ferriterc/ferrite-os' && cargo run --release -p ptx-tensor --example bench_ops
-   Compiling ptx-tensor v0.1.0 (/home/daron/fdfd/ferriterc/ferrite-os/internal/ptx-tensor)
+cmd: bash -lc cd '<ferrite-os>' && cargo run --release -p ptx-tensor --example bench_ops
+   Compiling ptx-tensor v0.1.0 (<ferrite-os>/internal/ptx-tensor)
     Finished `release` profile [optimized] target(s) in 2.55s
      Running `target/release/examples/bench_ops`
 === PTX-OS Tensor Elementwise Benchmark ===

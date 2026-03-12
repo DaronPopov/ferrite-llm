@@ -254,9 +254,9 @@ That reports:
 To build and run the runtime with TLSF allocator support locally:
 
 ```bash
-LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
+LD_LIBRARY_PATH=ferrite-os/lib:$LD_LIBRARY_PATH \
 cargo run -p ferrite-cli --features tlsf-alloc -- info
-LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
+LD_LIBRARY_PATH=ferrite-os/lib:$LD_LIBRARY_PATH \
 HF_TOKEN=your_token_here \
 FERRITE_TLSF_ALLOC=1 \
 FERRITE_TLSF_POOL_FRACTION=0.97 \
@@ -274,7 +274,7 @@ This now patches both the native Ferrite/Candle CUDA path and the `mistralrs` CU
 If you change native PTX-OS code under `ferrite-os/native/core`, rebuild the shared runtime library before rerunning the CLI:
 
 ```bash
-cd /home/daron/llm_engine/fer_llm/ferrite/ferrite-os
+cd ferrite-os
 make lib/libptx_os.so
 ```
 
@@ -286,7 +286,7 @@ For many GGUF models, you do not need custom kernels first.
 
 Typical process:
 
-1. Add a `ModelSpec` entry in [catalog.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/src/registry/catalog.rs)
+1. Add a `ModelSpec` entry in [catalog.rs](crates/ferrite-core/src/registry/catalog.rs)
 2. Choose the backend:
    `candle` if you want to extend Ferrite's native path
    `mistralrs` if you want broad GGUF support quickly
@@ -300,12 +300,12 @@ Current examples include:
 
 Set the model at runtime with `FERRITE_MODEL=<registry-name>`. Rebuilding the guest is not required just to switch models.
 
-For custom architectures or model-specific fused operators, Ferrite also owns a custom CUDA kernel path in [crates/ferrite-core](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core). Kernel sources live under [kernels](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/kernels), and the owned smoke example is [custom-kernel-smoke.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-kernel-smoke.rs).
-The owned attention benchmark is [custom-attention-bench.rs](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/examples/custom-attention-bench.rs).
+For custom architectures or model-specific fused operators, Ferrite also owns a custom CUDA kernel path in [crates/ferrite-core](crates/ferrite-core). Kernel sources live under [kernels](crates/ferrite-core/kernels), and the owned smoke example is [custom-kernel-smoke.rs](crates/ferrite-core/examples/custom-kernel-smoke.rs).
+The owned attention benchmark is [custom-attention-bench.rs](crates/ferrite-core/examples/custom-attention-bench.rs).
 
 ## Streaming
 
-True live token streaming across the WASM boundary now uses a polling handle in [ferrite.wit](/home/daron/llm_engine/fer_llm/ferrite/wit/ferrite.wit):
+True live token streaming across the WASM boundary now uses a polling handle in [ferrite.wit](wit/ferrite.wit):
 
 - `start-generate-stream`
 - `next-chunk`
@@ -314,15 +314,15 @@ The `mistralrs` backend is the reference live-streaming path.
 
 ## Docs
 
-- [docs/README.md](/home/daron/llm_engine/fer_llm/ferrite/docs/README.md): top-level docs index
-- [docs/ARCHITECTURE.md](/home/daron/llm_engine/fer_llm/ferrite/docs/ARCHITECTURE.md): diagrams and system explanation
-- [docs/RUNNING.md](/home/daron/llm_engine/fer_llm/ferrite/docs/RUNNING.md): runbook and commands
-- [docs/ENGINE_IDENTITY.md](/home/daron/llm_engine/fer_llm/ferrite/docs/ENGINE_IDENTITY.md): monorepo engine identity
-- [docs/INSTALLER_ARCHITECTURE.md](/home/daron/llm_engine/fer_llm/ferrite/docs/INSTALLER_ARCHITECTURE.md): installer design
-- [crates/ferrite-core/README.md](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core/README.md)
-- [crates/ferrite-wasm-host/README.md](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-wasm-host/README.md)
-- [crates/ferrite-sdk/README.md](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-sdk/README.md)
-- [crates/ferrite-cli/README.md](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-cli/README.md)
+- [docs/README.md](docs/README.md): top-level docs index
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): diagrams and system explanation
+- [docs/RUNNING.md](docs/RUNNING.md): runbook and commands
+- [docs/ENGINE_IDENTITY.md](docs/ENGINE_IDENTITY.md): monorepo engine identity
+- [docs/INSTALLER_ARCHITECTURE.md](docs/INSTALLER_ARCHITECTURE.md): installer design
+- [crates/ferrite-core/README.md](crates/ferrite-core/README.md)
+- [crates/ferrite-wasm-host/README.md](crates/ferrite-wasm-host/README.md)
+- [crates/ferrite-sdk/README.md](crates/ferrite-sdk/README.md)
+- [crates/ferrite-cli/README.md](crates/ferrite-cli/README.md)
 
 ## Development
 

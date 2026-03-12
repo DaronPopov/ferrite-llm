@@ -24,24 +24,24 @@ Narrower profiles still exist, but they are explicit opt-downs:
 
 ### Runtime product layer
 
-- [`crates/ferrite-cli`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-cli)
-- [`crates/ferrite-wasm-host`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-wasm-host)
-- [`crates/ferrite-core`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-core)
-- [`crates/ferrite-sdk`](/home/daron/llm_engine/fer_llm/ferrite/crates/ferrite-sdk)
-- [`examples/wasm`](/home/daron/llm_engine/fer_llm/ferrite/examples/wasm)
+- [`crates/ferrite-cli`](../crates/ferrite-cli)
+- [`crates/ferrite-wasm-host`](../crates/ferrite-wasm-host)
+- [`crates/ferrite-core`](../crates/ferrite-core)
+- [`crates/ferrite-sdk`](../crates/ferrite-sdk)
+- [`examples/wasm`](../examples/wasm)
 
 ### Platform substrate
 
-- [`ferrite-os`](/home/daron/llm_engine/fer_llm/ferrite/ferrite-os)
+- [`ferrite-os`](../ferrite-os)
 - `ferrite-os/lib/libptx_os.so`
 
 ### Programmable GPU layer
 
-- [`ferrite-gpu-lang`](/home/daron/llm_engine/fer_llm/ferrite/ferrite-gpu-lang)
+- [`ferrite-gpu-lang`](../ferrite-gpu-lang)
 
 ### Extended subsystem
 
-- [`external/ferrite-graphics`](/home/daron/llm_engine/fer_llm/ferrite/external/ferrite-graphics)
+- [`external/ferrite-graphics`](../external/ferrite-graphics)
 
 ## Current Profile Contract
 

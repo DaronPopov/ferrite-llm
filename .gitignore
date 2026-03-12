@@ -34,3 +34,6 @@ Thumbs.db
 # ferrite-os generated artifacts
 /ferrite-os/build/ptx_env.mk
 /ferrite-os/lib/
+
+# ferrite-graphics cmake build cache (machine-specific generated files)
+/external/ferrite-graphics/build/

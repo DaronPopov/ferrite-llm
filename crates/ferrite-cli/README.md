@@ -125,7 +125,7 @@ Model Support:
 For local CUDA inference with the TLSF allocator:
 
 ```bash
-LD_LIBRARY_PATH=/home/daron/llm_engine/fer_llm/ferrite/ferrite-os/lib:$LD_LIBRARY_PATH \
+LD_LIBRARY_PATH=../../ferrite-os/lib:$LD_LIBRARY_PATH \
 HF_TOKEN=your_token_here \
 FERRITE_MODEL=mistral-7b-q4 \
 FERRITE_BACKEND=mistralrs \
@@ -142,7 +142,7 @@ The CLI TLSF path is quiet by default. Routine pool-health warnings and attach b
 If you edit native PTX-OS code under `ferrite-os/native/core`, rebuild the shared runtime library before rerunning the CLI:
 
 ```bash
-cd /home/daron/llm_engine/fer_llm/ferrite/ferrite-os
+cd ../../ferrite-os
 make lib/libptx_os.so
 ```
 

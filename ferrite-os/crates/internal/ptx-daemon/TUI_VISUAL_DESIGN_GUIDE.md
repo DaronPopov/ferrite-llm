@@ -234,10 +234,10 @@ POOL FAIL        (FAIL)  -> text: FAIL + color: bad
 ## 10. Validation Commands
 
 ```bash
-cd /home/daron/fdfd/ferriterc/ferrite-os
+cd ./ferrite-os
 cargo check -p ferrite-daemon
 
-cd /home/daron/fdfd/ferriterc/ferrite-os
+cd ./ferrite-os
 cargo run -p ferrite-daemon -- serve --config crates/internal/ptx-daemon/dev-config.toml
 ```
 

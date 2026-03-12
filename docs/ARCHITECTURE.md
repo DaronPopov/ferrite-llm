@@ -224,7 +224,7 @@ Profiles still exist, but they are explicit narrower slices of the same engine.
 
 If you are new to the repo, read it in this order:
 
-1. [`README.md`](/home/daron/llm_engine/fer_llm/ferrite/README.md)
-2. [Running Ferrite](/home/daron/llm_engine/fer_llm/ferrite/docs/RUNNING.md)
-3. [Engine Identity](/home/daron/llm_engine/fer_llm/ferrite/docs/ENGINE_IDENTITY.md)
+1. [`README.md`](../README.md)
+2. [Running Ferrite](RUNNING.md)
+3. [Engine Identity](ENGINE_IDENTITY.md)
 4. subsystem READMEs for the part you are touching
