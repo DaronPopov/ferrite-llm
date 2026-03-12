@@ -13,6 +13,16 @@ fn env_enabled(name: &str) -> bool {
 }
 
 #[cfg(feature = "tlsf-alloc")]
+fn env_f32(name: &str) -> Option<f32> {
+    std::env::var(name).ok()?.parse().ok()
+}
+
+#[cfg(feature = "tlsf-alloc")]
+fn env_usize(name: &str) -> Option<usize> {
+    std::env::var(name).ok()?.parse().ok()
+}
+
+#[cfg(feature = "tlsf-alloc")]
 fn prefer_orin_unified_memory() -> bool {
     env_enabled("FERRITE_TLSF_PREFER_ORIN_UM") || std::env::consts::ARCH == "aarch64"
 }
@@ -20,6 +30,44 @@ fn prefer_orin_unified_memory() -> bool {
 #[cfg(feature = "tlsf-alloc")]
 fn allocator_requested() -> bool {
     env_enabled("FERRITE_TLSF_ALLOC")
+}
+
+#[cfg(feature = "tlsf-alloc")]
+fn configured_pool_fraction() -> f32 {
+    env_f32("FERRITE_TLSF_POOL_FRACTION")
+        .filter(|value| *value > 0.0 && *value <= 1.0)
+        .unwrap_or(0.75)
+}
+
+#[cfg(feature = "tlsf-alloc")]
+fn configured_fixed_pool_size_bytes() -> usize {
+    let mib = env_usize("FERRITE_TLSF_POOL_MB");
+    let bytes = env_usize("FERRITE_TLSF_POOL_BYTES");
+    bytes.or_else(|| mib.map(|value| value * 1024 * 1024)).unwrap_or(0)
+}
+
+#[cfg(feature = "tlsf-alloc")]
+fn configured_reserve_vram_bytes() -> usize {
+    let mib = env_usize("FERRITE_TLSF_RESERVE_VRAM_MB");
+    let bytes = env_usize("FERRITE_TLSF_RESERVE_VRAM_BYTES");
+    bytes.or_else(|| mib.map(|value| value * 1024 * 1024))
+        .unwrap_or(256 * 1024 * 1024)
+}
+
+#[cfg(feature = "tlsf-alloc")]
+fn configured_min_pool_size_bytes() -> usize {
+    env_usize("FERRITE_TLSF_MIN_POOL_MB")
+        .map(|value| value * 1024 * 1024)
+        .or_else(|| env_usize("FERRITE_TLSF_MIN_POOL_BYTES"))
+        .unwrap_or(512 * 1024 * 1024)
+}
+
+#[cfg(feature = "tlsf-alloc")]
+fn configured_max_pool_size_bytes() -> usize {
+    env_usize("FERRITE_TLSF_MAX_POOL_MB")
+        .map(|value| value * 1024 * 1024)
+        .or_else(|| env_usize("FERRITE_TLSF_MAX_POOL_BYTES"))
+        .unwrap_or(0)
 }
 
 #[cfg(feature = "tlsf-alloc")]
@@ -33,6 +81,11 @@ pub fn maybe_enable_tlsf_allocator(device_id: i32) -> Result<()> {
     }
 
     let mut config = ptx_sys::GPUHotConfig::default();
+    config.pool_fraction = configured_pool_fraction();
+    config.fixed_pool_size = configured_fixed_pool_size_bytes();
+    config.min_pool_size = configured_min_pool_size_bytes();
+    config.max_pool_size = configured_max_pool_size_bytes();
+    config.reserve_vram = configured_reserve_vram_bytes();
     config.prefer_orin_unified_memory = prefer_orin_unified_memory();
     config.quiet_init = !env_enabled("FERRITE_TLSF_VERBOSE");
 
@@ -43,6 +96,11 @@ pub fn maybe_enable_tlsf_allocator(device_id: i32) -> Result<()> {
     let _ = TLSF_RUNTIME.set(runtime);
     tracing::info!(
         device_id,
+        pool_fraction = config.pool_fraction,
+        fixed_pool_size = config.fixed_pool_size,
+        min_pool_size = config.min_pool_size,
+        max_pool_size = config.max_pool_size,
+        reserve_vram = config.reserve_vram,
         prefer_orin_unified_memory = config.prefer_orin_unified_memory,
         "Ferrite TLSF allocator enabled"
     );
