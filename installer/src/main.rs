@@ -1193,13 +1193,21 @@ fn export_subdir(
         return Ok(());
     }
     fs::create_dir_all(dep_root)?;
-    let archive_spec = format!("{rev}:{subdir}");
-    let output = command_output(command_in_dir("git", &["archive", "--format=tar", &archive_spec], repo_cache))?;
+    let output = if subdir == "." || subdir.is_empty() {
+        command_output(command_in_dir("git", &["archive", "--format=tar", rev], repo_cache))?
+    } else {
+        let archive_spec = format!("{rev}:{subdir}");
+        command_output(command_in_dir("git", &["archive", "--format=tar", &archive_spec], repo_cache))?
+    };
     if !output.status.success() {
         return Err(format!(
             "git archive failed for {} {}",
             repo_cache.display(),
-            archive_spec
+            if subdir == "." || subdir.is_empty() {
+                rev.to_string()
+            } else {
+                format!("{rev}:{subdir}")
+            }
         )
         .into());
     }

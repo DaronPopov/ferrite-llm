@@ -1,7 +1,7 @@
 [[feature_bundle]]
 id = "torch"
 description = "Enable the PyTorch bridge and TLSF allocator stack."
-source_deps = ["aten-ptx", "cudarc-ptx", "cutlass-ptx", "ferrite-torch"]
+source_deps = ["aten-ptx", "cudarc-ptx", "cutlass-ptx", "cutlass-src", "ferrite-torch"]
 runtime_contracts = ["torch-runtime"]
 derived_artifacts = ["libptx-os", "env-contract"]
 validations = ["cargo-check-torch", "script-cv-detect"]

@@ -6,7 +6,7 @@ materialization_root = ".ferrite/store"
 [[runtime_contract]]
 id = "torch-runtime"
 kind = "torch-cpp-runtime"
-source_deps = ["aten-ptx", "cudarc-ptx", "cutlass-ptx", "ferrite-torch"]
+source_deps = ["aten-ptx", "cudarc-ptx", "cutlass-ptx", "cutlass-src", "ferrite-torch"]
 
 [runtime_contract.compat]
 tch = "0.22"
@@ -40,6 +40,13 @@ repo = "git@github.com:DaronPopov/ferriterc.git"
 commit = "main"
 subdir = "external/cutlass-ptx"
 target = "external/cutlass-ptx"
+
+[[source_dep]]
+id = "cutlass-src"
+repo = "https://github.com/NVIDIA/cutlass.git"
+commit = "v3.7.0"
+subdir = "."
+target = "external/cutlass-ptx/cutlass"
 
 [[source_dep]]
 id = "ferrite-torch"
