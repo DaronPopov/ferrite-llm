@@ -1,6 +1,7 @@
 [profile]
 id = "ci-builder"
 extends = "base"
+product = "ferrite-llm"
 host_family = "linux"
 features = []
 validations = ["manifest-lint", "cargo-check"]

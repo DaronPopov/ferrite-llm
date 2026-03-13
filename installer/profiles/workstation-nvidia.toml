@@ -1,6 +1,7 @@
 [profile]
 id = "workstation-nvidia"
 extends = "base"
+product = "ferrite-llm"
 host_family = "linux"
 features = ["torch", "graphics", "capture"]
 validations = ["cuda-driver", "cargo-check", "doctor"]

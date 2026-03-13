@@ -108,6 +108,22 @@ struct FeatureManifest {
 }
 
 #[derive(Debug, Deserialize)]
+struct ProductManifest {
+    #[serde(default)]
+    product: Vec<Product>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Product {
+    id: String,
+    description: String,
+    #[serde(default)]
+    build_packages: Vec<String>,
+    #[serde(default)]
+    check_packages: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 struct FeatureBundle {
     id: String,
     description: String,
@@ -161,6 +177,7 @@ struct ProfileManifest {
 struct Profile {
     id: String,
     extends: String,
+    product: String,
     host_family: String,
     features: Vec<String>,
     validations: Vec<String>,
@@ -178,6 +195,7 @@ struct Providers {
 struct InstallerContext {
     root: PathBuf,
     graph: GraphManifest,
+    products: ProductManifest,
     features: FeatureManifest,
     host_tools: HostToolsManifest,
     profile: ProfileManifest,
@@ -241,6 +259,7 @@ fn load_context(root: &Path, profile_name: &str) -> Result<InstallerContext, Dyn
     Ok(InstallerContext {
         root: root.to_path_buf(),
         graph: read_toml(&root.join("manifests/graph.toml"))?,
+        products: read_toml(&root.join("manifests/products.toml"))?,
         features: read_toml(&root.join("manifests/features.toml"))?,
         host_tools: read_toml(&root.join("manifests/host-tools.toml"))?,
         profile: read_toml(&root.join(format!("profiles/{profile_name}.toml")))?,
@@ -258,6 +277,10 @@ where
 fn print_plan(ctx: &InstallerContext) {
     println!("profile={}", ctx.profile.profile.id);
     println!("extends={}", ctx.profile.profile.extends);
+    println!("product={}", ctx.profile.profile.product);
+    if let Ok(product) = selected_product(ctx) {
+        println!("product_description={}", product.description);
+    }
     println!("host_family={}", ctx.profile.profile.host_family);
     println!("current_host={}/{}", env::consts::OS, env::consts::ARCH);
     println!("state_root={}", ctx.graph.graph.state_root);
@@ -375,6 +398,7 @@ fn print_resolve(ctx: &InstallerContext) -> Result<(), DynError> {
     let resolved_assets = selected_runtime_assets(ctx)?;
 
     println!("profile={}", ctx.profile.profile.id);
+    println!("product={}", ctx.profile.profile.product);
     println!("current_host={}/{}", env::consts::OS, env::consts::ARCH);
     println!("selected_runtime_assets={}", resolved_assets.len());
 
@@ -412,6 +436,7 @@ fn print_detect(ctx: &InstallerContext) {
     println!("installer_root={}", ctx.root.display());
     println!("graph_version={}", ctx.graph.graph.version);
     println!("profile={}", ctx.profile.profile.id);
+    println!("product={}", ctx.profile.profile.product);
     println!("current_host={}/{}", env::consts::OS, env::consts::ARCH);
     println!("jetson_detected={}", yes_no(is_jetson_host()));
     println!("bootstrap_tools={}", ctx.host_tools.tool.len());
@@ -639,15 +664,11 @@ fn build_profile(ctx: &InstallerContext) -> Result<(), DynError> {
     )?;
     println!("build.native-runtime=ok");
 
-    let workspace_build_cmd = if profile_needs_torch(ctx) {
-        "cargo build --workspace"
-    } else {
-        "cargo build --workspace --exclude ferrite-torch --exclude aten-ptx --exclude candle-ptx --exclude ferrite-gpu-lang"
-    };
+    let workspace_build_cmd = product_build_command(ctx)?;
     run_shell_in_repo(
         repo_root,
         &env_script,
-        workspace_build_cmd,
+        &workspace_build_cmd,
         "build workspace",
     )?;
     println!("build.workspace=ok");
@@ -697,15 +718,11 @@ fn validate_profile(ctx: &InstallerContext) -> Result<(), DynError> {
     println!("profile={}", ctx.profile.profile.id);
     println!("env_script={}", env_script.display());
 
-    let workspace_check_cmd = if profile_needs_torch(ctx) {
-        "cargo check --workspace"
-    } else {
-        "cargo check --workspace --exclude ferrite-torch --exclude aten-ptx --exclude candle-ptx --exclude ferrite-gpu-lang"
-    };
+    let workspace_check_cmd = product_check_command(ctx)?;
     run_shell_in_repo(
         repo_root,
         &env_script,
-        workspace_check_cmd,
+        &workspace_check_cmd,
         "validate workspace check",
     )?;
     println!("validate.workspace-check=ok");
@@ -746,6 +763,43 @@ fn selected_runtime_assets<'a>(ctx: &'a InstallerContext) -> Result<Vec<&'a Bina
         resolved.push(asset);
     }
     Ok(resolved)
+}
+
+fn selected_product<'a>(ctx: &'a InstallerContext) -> Result<&'a Product, DynError> {
+    ctx.products
+        .product
+        .iter()
+        .find(|product| product.id == ctx.profile.profile.product)
+        .ok_or_else(|| {
+            format!(
+                "profile references unknown product: {}",
+                ctx.profile.profile.product
+            )
+            .into()
+        })
+}
+
+fn cargo_package_command(subcommand: &str, packages: &[String]) -> String {
+    if packages.is_empty() {
+        return format!("cargo {subcommand} --workspace");
+    }
+
+    let package_args = packages
+        .iter()
+        .map(|pkg| format!("-p {pkg}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    format!("cargo {subcommand} {package_args}")
+}
+
+fn product_build_command(ctx: &InstallerContext) -> Result<String, DynError> {
+    let product = selected_product(ctx)?;
+    Ok(cargo_package_command("build", &product.build_packages))
+}
+
+fn product_check_command(ctx: &InstallerContext) -> Result<String, DynError> {
+    let product = selected_product(ctx)?;
+    Ok(cargo_package_command("check", &product.check_packages))
 }
 
 fn materialize_source_dep(

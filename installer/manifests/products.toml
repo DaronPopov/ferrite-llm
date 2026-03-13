@@ -1,0 +1,21 @@
+[[product]]
+id = "ferrite-llm"
+description = "Standalone LLM runtime slice from the Ferrite monorepo."
+build_packages = [
+  "ferrite-core",
+  "ferrite-wasm-host",
+  "ferrite-sdk",
+  "ferrite-cli",
+  "hello-inference",
+  "mistral-inference",
+  "orin-inference",
+]
+check_packages = [
+  "ferrite-core",
+  "ferrite-wasm-host",
+  "ferrite-sdk",
+  "ferrite-cli",
+  "hello-inference",
+  "mistral-inference",
+  "orin-inference",
+]

@@ -1,6 +1,7 @@
 [profile]
 id = "cpu-only-dev"
 extends = "base"
+product = "ferrite-llm"
 host_family = "linux"
 features = []
 validations = ["cargo-check", "wasm-build"]

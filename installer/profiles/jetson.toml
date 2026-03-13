@@ -1,6 +1,7 @@
 [profile]
 id = "jetson"
 extends = "base"
+product = "ferrite-llm"
 host_family = "linux"
 features = ["capture"]
 validations = ["jetson-cuda", "cargo-check", "doctor"]
