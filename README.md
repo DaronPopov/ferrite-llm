@@ -26,7 +26,7 @@ Both backends now support live polling-based streaming through the WASM generati
 The intended bootstrap path is a curl one-liner:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite-llm/main/install.sh | bash
 ```
 
 That default path now builds the full Ferrite engine stack with the `mega`
@@ -47,18 +47,18 @@ If no profile is provided, the installer auto-detects:
 Examples:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite-llm/main/install.sh | \
   bash -s -- --profile workstation-nvidia
 ```
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite/main/install.sh | \
+curl -fsSL https://raw.githubusercontent.com/DaronPopov/ferrite-llm/main/install.sh | \
   bash -s -- --profile jetson
 ```
 
 What the default one-line install now does:
 
-- clones or updates `ferrite` into `~/.local/share/ferrite/src/ferrite`
+- clones or updates `ferrite-llm` into `~/.local/share/ferrite-llm/src/ferrite-llm`
 - hands off to `installer/bootstrap/bootstrap.sh`
 - auto-detects the appropriate machine profile when none is specified
 - bootstraps host tools, pinned source deps, runtime assets, env, build, and validation through the managed installer pipeline
@@ -96,7 +96,7 @@ HF_TOKEN=your_token_here \
 FERRITE_MODEL=qwen3-8b-q4 \
 FERRITE_REQUIRE_CUDA=1 \
 FERRITE_BACKEND=mistralrs \
-ferrite-rt run ~/.local/share/ferrite/src/ferrite/target/wasm32-wasip1/release/mistral_inference.component.wasm
+ferrite-rt run ~/.local/share/ferrite-llm/src/ferrite-llm/target/wasm32-wasip1/release/mistral_inference.component.wasm
 ```
 
 For local development from a repo checkout, prefer:
@@ -331,4 +331,4 @@ wasm-tools component new \
 
 ## Repository
 
-- Canonical repo: https://github.com/DaronPopov/ferrite
+- Canonical repo: https://github.com/DaronPopov/ferrite-llm

@@ -242,6 +242,7 @@ fn native_runtime_library_dirs(runner_dir: Option<&Path>) -> Vec<PathBuf> {
     if let Some(runner_dir) = runner_dir {
         candidates.push(runner_dir.join("lib"));
         candidates.push(runner_dir.join("../share/ferrite/src/ferrite/ferrite-os/lib"));
+        candidates.push(runner_dir.join("../share/ferrite-llm/src/ferrite-llm/ferrite-os/lib"));
     }
 
     if let Ok(Some(repo_root)) = find_repo_root() {
@@ -621,7 +622,17 @@ fn find_repo_root() -> Result<Option<PathBuf>> {
 }
 
 fn default_install_repo_root() -> Option<PathBuf> {
-    dirs::home_dir().map(|home| home.join(".local/share/ferrite/src/ferrite"))
+    dirs::home_dir().and_then(|home| {
+        let standalone = home.join(".local/share/ferrite-llm/src/ferrite-llm");
+        if standalone.is_dir() {
+            return Some(standalone);
+        }
+        let monorepo = home.join(".local/share/ferrite/src/ferrite");
+        if monorepo.is_dir() {
+            return Some(monorepo);
+        }
+        Some(standalone)
+    })
 }
 
 fn add_repo_checks(report: &mut DoctorReport, repo_root: &Path, profile: &str) {

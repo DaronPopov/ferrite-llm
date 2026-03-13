@@ -16,7 +16,7 @@ version = "0.3.0"
 edition = "2021"
 rust-version = "1.88"
 authors = ["DaronPopov"]
-repository = "https://github.com/DaronPopov/ferrite"
+repository = "https://github.com/DaronPopov/ferrite-llm"
 license = "LicenseRef-Proprietary"
 
 # Shared dependencies across workspace

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_URL="${FERRITE_REPO_URL:-https://github.com/DaronPopov/ferrite.git}"
-ARCHIVE_URL="${FERRITE_ARCHIVE_URL:-https://github.com/DaronPopov/ferrite/archive/refs/heads/main.tar.gz}"
-INSTALL_ROOT="${FERRITE_INSTALL_ROOT:-$HOME/.local/share/ferrite}"
-SRC_DIR="${FERRITE_SRC_DIR:-$INSTALL_ROOT/src/ferrite}"
+REPO_URL="${FERRITE_REPO_URL:-https://github.com/DaronPopov/ferrite-llm.git}"
+ARCHIVE_URL="${FERRITE_ARCHIVE_URL:-https://github.com/DaronPopov/ferrite-llm/archive/refs/heads/main.tar.gz}"
+INSTALL_ROOT="${FERRITE_INSTALL_ROOT:-$HOME/.local/share/ferrite-llm}"
+SRC_DIR="${FERRITE_SRC_DIR:-$INSTALL_ROOT/src/ferrite-llm}"
 PREFIX="${FERRITE_PREFIX:-$HOME/.local}"
 BIN_DIR="$PREFIX/bin"
 ARCH="$(uname -m)"
@@ -23,7 +23,7 @@ CUDA_VERSION=""
 
 usage() {
     cat <<'EOF'
-Ferrite installer
+ Ferrite LLM installer
 
 Usage:
   install.sh [--profile PROFILE] [--apply] [--help] [--list-profiles]
@@ -75,11 +75,11 @@ need_cmd() {
 }
 
 log() {
-    printf '[ferrite-install] %s\n' "$1"
+    printf '[ferrite-llm-install] %s\n' "$1"
 }
 
 fail() {
-    printf '[ferrite-install] error: %s\n' "$1" >&2
+    printf '[ferrite-llm-install] error: %s\n' "$1" >&2
     exit 1
 }
 
@@ -283,12 +283,12 @@ cuda_is_functional() {
 }
 
 migrate_old_install() {
-    # Remove legacy ferrite-llm install path so a clean clone happens from the
-    # correct repo. Only removes if the NEW install root doesn't exist yet.
-    local old_root="$HOME/.local/share/ferrite-llm"
-    if [ -d "$old_root" ] && [ ! -d "$INSTALL_ROOT" ]; then
-        log "Removing legacy ferrite-llm install at $old_root"
-        rm -rf "$old_root"
+    # Older standalone snapshots used INSTALL_ROOT/src/ferrite even though the
+    # repo was ferrite-llm. Rename that checkout in-place when possible.
+    local legacy_src="$INSTALL_ROOT/src/ferrite"
+    if [ -d "$legacy_src/.git" ] && [ ! -e "$SRC_DIR" ]; then
+        log "Migrating legacy source checkout from $legacy_src to $SRC_DIR"
+        mv "$legacy_src" "$SRC_DIR"
     fi
 }
 
@@ -321,7 +321,10 @@ refresh_repo() {
     tar -xzf "$archive" -C "$unpack_dir"
     rm -f "$archive"
     mkdir -p "$(dirname "$SRC_DIR")"
-    mv "$unpack_dir"/ferrite-main "$SRC_DIR"
+    local extracted_root
+    extracted_root="$(find "$unpack_dir" -mindepth 1 -maxdepth 1 -type d | head -1)"
+    [ -n "$extracted_root" ] || fail "archive did not contain a top-level source directory"
+    mv "$extracted_root" "$SRC_DIR"
     rmdir "$unpack_dir" 2>/dev/null || true
 }
 

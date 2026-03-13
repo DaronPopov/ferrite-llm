@@ -86,7 +86,7 @@ HF_TOKEN=your_token_here \
 FERRITE_MODEL=qwen3-8b-q4 \
 FERRITE_REQUIRE_CUDA=1 \
 FERRITE_BACKEND=mistralrs \
-ferrite-rt run "$HOME/.local/share/ferrite/src/ferrite/target/wasm32-wasip1/release/mistral_inference.component.wasm"
+ferrite-rt run "$HOME/.local/share/ferrite-llm/src/ferrite-llm/target/wasm32-wasip1/release/mistral_inference.component.wasm"
 ```
 
 ## Hook Safety
