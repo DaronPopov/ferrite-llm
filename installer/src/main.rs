@@ -1465,12 +1465,33 @@ fn profile_has_feature(ctx: &InstallerContext, name: &str) -> bool {
     ctx.profile.profile.features.iter().any(|feature| feature == name)
 }
 
+fn has_nvidia_gpu() -> bool {
+    // Fast path: nvidia-smi exits 0 only when driver + at least one device is up
+    if std::process::Command::new("nvidia-smi")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+    {
+        return true;
+    }
+    // Fallback: device node present (driver loaded but smi absent)
+    Path::new("/dev/nvidia0").exists()
+}
+
 fn detect_default_profile() -> String {
     if is_jetson_host() {
         return "jetson".to_string();
     }
     match (env::consts::OS, env::consts::ARCH) {
-        ("linux", "x86_64") => "workstation-nvidia".to_string(),
+        ("linux", "x86_64") => {
+            if has_nvidia_gpu() {
+                "workstation-nvidia".to_string()
+            } else {
+                "cpu-only-dev".to_string()
+            }
+        }
         _ => "cpu-only-dev".to_string(),
     }
 }
