@@ -35,6 +35,7 @@ equivalent workstation/Jetson profile via the declarative installer pipeline.
 Available installer profiles:
 
 - `workstation-nvidia`: desktop/server NVIDIA Linux path
+- `workstation-full`: full Ferrite monorepo workstation build
 - `jetson`: NVIDIA Jetson embedded path
 - `cpu-only-dev`: CPU-only development path
 

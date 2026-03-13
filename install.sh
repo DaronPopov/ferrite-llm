@@ -30,6 +30,7 @@ Usage:
 
 Profiles:
   workstation-nvidia  Desktop/server NVIDIA Linux path
+  workstation-full    Full monorepo workstation build
   jetson              NVIDIA Jetson embedded path
   cpu-only-dev        CPU-only development path
 
@@ -65,6 +66,7 @@ EOF
 list_profiles() {
     cat <<'EOF'
 workstation-nvidia
+workstation-full
 jetson
 cpu-only-dev
 EOF

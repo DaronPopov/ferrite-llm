@@ -1,0 +1,12 @@
+[profile]
+id = "workstation-full"
+extends = "base"
+product = "ferrite-full"
+host_family = "linux"
+features = ["torch", "graphics", "capture", "finetune"]
+validations = ["cuda-driver", "cargo-check", "doctor"]
+runtime_assets = ["torch-runtime-x86_64-cu126"]
+
+[profile.providers]
+system = "apt"
+binary_assets = "pytorch"

@@ -5,6 +5,7 @@ This directory is the beginning of Ferrite's declarative installer control plane
 Current contents:
 
 - `manifests/`: desired graph, feature bundles, host tools, and system package intent
+- `manifests/products.toml`: installable product slices such as `ferrite-llm` and `ferrite-full`
 - `profiles/`: machine-specific provider and validation selection
 - `templates/`: generated runtime envelope templates
 - `bootstrap/bootstrap.sh`: minimal bootstrap entrypoint
@@ -87,6 +88,11 @@ If `--profile` is omitted, the installer auto-selects:
 - `jetson` on detected NVIDIA Jetson `aarch64` hosts
 - `workstation-nvidia` on `linux/x86_64`
 - `cpu-only-dev` otherwise
+
+Current product model:
+
+- `ferrite-llm`: builds the LLM/runtime package slice only
+- `ferrite-full`: builds the full monorepo workspace
 
 Right now the engine can:
 

@@ -19,3 +19,9 @@ check_packages = [
   "mistral-inference",
   "orin-inference",
 ]
+
+[[product]]
+id = "ferrite-full"
+description = "Full Ferrite monorepo product build."
+build_packages = []
+check_packages = []
