@@ -299,9 +299,11 @@ refresh_repo() {
     if need_cmd git; then
         if [ -d "$SRC_DIR/.git" ]; then
             log "Updating existing repo at $SRC_DIR"
+            git -C "$SRC_DIR" remote set-url origin "$REPO_URL" >/dev/null 2>&1 || true
             git -C "$SRC_DIR" fetch origin
-            git -C "$SRC_DIR" checkout main
-            git -C "$SRC_DIR" pull --ff-only origin main
+            git -C "$SRC_DIR" checkout -B main origin/main
+            git -C "$SRC_DIR" reset --hard origin/main
+            git -C "$SRC_DIR" clean -fd
             git -C "$SRC_DIR" submodule update --init --recursive
             return 0
         fi
